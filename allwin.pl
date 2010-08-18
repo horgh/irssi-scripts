@@ -7,6 +7,11 @@
 #
 # This code is based on hilightwin.pl by Timo Sirainen & znx
 #
+# Setup:
+#  /window new hide
+#  <switch to the window
+#  /window name allwin
+#
 # Settings:
 # /set allwin_ignore_channels #ignored1 #ignored2
 # Causes #ignored1 and #ignored2 messages to not be shown in allwin
