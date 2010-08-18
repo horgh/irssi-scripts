@@ -13,8 +13,8 @@
 #  /window name allwin
 #
 # Settings:
-# /set allwin_ignore_channels #ignored1 #ignored2
-# Causes #ignored1 and #ignored2 messages to not be shown in allwin
+#  /set allwin_ignore_channels #ignored1 #ignored2
+#  Causes #ignored1 and #ignored2 messages to not be shown in allwin
 #
 
 use Irssi;
