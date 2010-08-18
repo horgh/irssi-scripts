@@ -18,13 +18,13 @@ use vars qw($VERSION %IRSSI);
 
 $VERSION = "0.01";
 %IRSSI = (
-    authors     => "horgh",
-    contact     => "will\@summercat.com", 
-    name        => "allwin",
-    description => "Print public messages to window named \"allwin\"",
-    license     => "Public Domain",
-    url         => "http://irssi.org/",
-    changed     => "Tuesday August 17 2010"
+	authors     => "horgh",
+	contact     => "will\@summercat.com", 
+	name        => "allwin",
+	description => "Print public messages to window named \"allwin\"",
+	license     => "Public Domain",
+	url         => "http://irssi.org/",
+	changed     => "Tuesday August 17 2010"
 );
 
 Irssi::theme_register([
@@ -32,22 +32,22 @@ Irssi::theme_register([
 ]);
 
 sub sig_msg_pub {
-    my ($server, $msg, $nick, $address, $target) = @_;
+	my ($server, $msg, $nick, $address, $target) = @_;
 
-		# Check if channel is set as ignored
-		my $ignored_raw = Irssi::settings_get_str('allwin_ignore_channels');
-		my @ignored = split(/ /, $ignored_raw);
-		if (grep /$target/, @ignored) {
-			return;
-		}
+	# Check if channel is set as ignored
+	my $ignored_raw = Irssi::settings_get_str('allwin_ignore_channels');
+	my @ignored = split(/ /, $ignored_raw);
+	if (grep /$target/, @ignored) {
+		return;
+	}
 
-		# Setup timestamp
-		$timestamp = strftime(
-			Irssi::settings_get_str('timestamp_format')." ", localtime);
+	# Setup timestamp
+	$timestamp = strftime(
+		Irssi::settings_get_str('timestamp_format')." ", localtime);
 
-    $window = Irssi::window_find_name('allwin');
-    #$window->print($msg, MSGLEVEL_NEVER) if ($window);
-		$window->printformat(MSGLEVEL_NEVER, 'allmsg', $nick, $target, $msg, $timestamp);
+	$window = Irssi::window_find_name('allwin');
+	#$window->print($msg, MSGLEVEL_NEVER) if ($window);
+	$window->printformat(MSGLEVEL_NEVER, 'allmsg', $nick, $target, $msg, $timestamp);
 }
 
 $window = Irssi::window_find_name('allwin');
