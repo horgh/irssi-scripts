@@ -73,7 +73,7 @@ sub format_channel {
 		$session_colours{$channel} = $colour;
 	}
 	$colour = "0".$colour if ($colour < 10);
-	$channel = sprintf("%-" . $channel_length . "s", $channel);
+	$channel = sprintf("%-" . $channel_length . "." . $channel_length . "s", $channel);
 	return chr(3) . $colour . $channel;
 }
 
