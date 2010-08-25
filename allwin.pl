@@ -16,7 +16,10 @@
 #
 # Settings:
 #  /set allwin_ignore_channels #ignored1 #ignored2
-#  Causes #ignored1 and #ignored2 messages to not be shown in allwin
+#   Causes #ignored1 and #ignored2 messages to not be shown in allwin
+#  /set allwin_msg_channel #channel
+#   Messages entered into the allwin window will be sent to this channel
+#   (Will find first channel named this)
 #
 
 use Irssi;
@@ -71,7 +74,6 @@ sub format_channel {
 	}
 	$colour = "0".$colour if ($colour < 10);
 	$channel = sprintf("%-" . $channel_length . "s", $channel);
-	print ("chan: ." . $channel . ".");
 	return chr(3) . $colour . $channel;
 }
 
@@ -100,10 +102,29 @@ sub sig_msg_pub_own {
 	sig_msg_pub($server, $msg, $server->{nick}, "", $target);
 }
 
+sub sig_window_text {
+	my ($cmd, $server, $witem) = @_;
+	$win = Irssi::active_win();
+	$name = $win->{name};
+	# Window not named allwin
+	return if $name ne "allwin";
+
+	my $msg_channel = Irssi::settings_get_str('allwin_msg_channel');
+	# Msg channel not set
+	return if !$msg_channel;
+	
+	$chan = Irssi::channel_find($msg_channel);
+	# Channel not found
+	return if !$chan;
+	$chan->{server}->command("msg $chan->{name} $cmd");
+}
+
 $window = Irssi::window_find_name('allwin');
 Irssi::print("Create a window named 'allwin'") if (!$window);
 
 Irssi::settings_add_str('allwin', 'allwin_ignore_channels', '');
+Irssi::settings_add_str('allwin', 'allwin_msg_channel', '');
 
 Irssi::signal_add('message public', 'sig_msg_pub');
 Irssi::signal_add('message own_public', 'sig_msg_pub_own');
+Irssi::signal_add('send text', 'sig_window_text');
