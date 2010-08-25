@@ -1,5 +1,5 @@
 #
-# 17/08/2010
+# Created 17/08/2010
 # by horgh
 #
 # Print all public messages into a window named 'allwin' while
@@ -26,7 +26,7 @@ use Irssi;
 use POSIX;
 use vars qw($VERSION %IRSSI); 
 
-$VERSION = "0.01";
+$VERSION = "25082010";
 %IRSSI = (
 	authors     => "horgh",
 	contact     => "will\@summercat.com", 
@@ -34,7 +34,7 @@ $VERSION = "0.01";
 	description => "Print public messages to window named \"allwin\"",
 	license     => "Public Domain",
 	url         => "http://summercat.com/",
-	changed     => "Tuesday August 17 2010"
+	changed     => $VERSION
 );
 
 my $channel_length = 10;
