@@ -23,10 +23,9 @@
 #
 
 use Irssi;
-use POSIX;
 use vars qw($VERSION %IRSSI); 
 
-$VERSION = "25082010";
+$VERSION = "20100825";
 %IRSSI = (
 	authors     => "horgh",
 	contact     => "will\@summercat.com", 
