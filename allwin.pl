@@ -24,6 +24,7 @@
 
 use Irssi;
 use vars qw($VERSION %IRSSI); 
+use POSIX;
 
 $VERSION = "20100825";
 %IRSSI = (
@@ -78,6 +79,7 @@ sub format_channel {
 
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
+	$target = lc($target);
 
 	# Check if channel is set as ignored
 	my $ignored_raw = Irssi::settings_get_str('allwin_ignore_channels');
@@ -87,8 +89,7 @@ sub sig_msg_pub {
 	}
 
 	# Setup timestamp
-	$timestamp = strftime(
-		Irssi::settings_get_str('timestamp_format')." ", localtime);
+	$timestamp = strftime(Irssi::settings_get_str('timestamp_format')." ", localtime);
 
 	$target = format_channel($target);
 
