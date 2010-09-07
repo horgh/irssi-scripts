@@ -51,8 +51,8 @@ create_table();
 
 my $sth_del = $dbh->prepare("DELETE FROM seen WHERE server = ? AND nick = ? AND uhost = ?");
 my $sth_add = $dbh->prepare("INSERT INTO seen VALUES(?, ?, ?, ?, ?)");
-my $sth_search_nick = $dbh->prepare("SELECT * FROM seen WHERE server = ? AND nick REGEXP ? ORDER BY time DESC LIMIT 1");
-my $sth_search_host = $dbh->prepare("SELECT * FROM seen WHERE server = ? AND uhost REGEXP ? ORDER BY time DESC LIMIT 1");
+my $sth_search_nick = $dbh->prepare("SELECT * FROM seen WHERE server = ? AND nick LIKE ? ORDER BY time DESC LIMIT 1");
+my $sth_search_host = $dbh->prepare("SELECT * FROM seen WHERE server = ? AND uhost LIKE ? ORDER BY time DESC LIMIT 1");
 
 sub create_table {
 	# Check if table exists
@@ -68,11 +68,17 @@ sub sig_irssi_quit {
 
 sub print_stats_usage {
 	my ($server, $target) = @_;
-	$server->command("msg $target Usage: !seen [-nick | -host] /regular expression/");
+	$server->command("msg $target Usage: !seen [-nick | -host] <pattern>");
 	my $res = $dbh->selectall_arrayref("SELECT COUNT(*) AS count FROM seen");
 	my $count = $res->[0][0];
 	my $filesize = stat($dbfile)->size / 1024;
 	$server->command("msg $target $count seen records using $filesize KB.");
+}
+
+# Own !seen/.seen
+sub sig_msg_own_pub {
+	my ($server, $msg, $target) = @_;
+	sig_msg_pub($server, $msg, "", "", $target);
 }
 
 # Handle !seen/.seen
@@ -81,7 +87,7 @@ sub sig_msg_pub {
 	# Only trigger in enabled channels
 	return if !chan_in_settings_str("seen_trigger_channels", $target);
 
-	my ($flags, $pattern) = $msg =~ /[!\.]seen (-\S+)? ?(\S+)/i;
+	my ($flags, $pattern) = $msg =~ /^[!\.]seen (-\S+)? ?(\S+)/i;
 	if (!$pattern) {
 		print_stats_usage($server, $target) if $msg =~ /^[!\.]seen$/;
 		return;
@@ -97,6 +103,7 @@ sub sig_msg_pub {
 		return;
 	}
 
+	$pattern =~ s/\*/%/g;
 	my $rv = $sth->execute($server->{tag}, $pattern);
 	my $row = $sth->fetchrow_hashref;
 	if (!$row) {
@@ -206,6 +213,7 @@ Irssi::signal_add('message kick', 'sig_kick');
 Irssi::signal_add('message nick', 'sig_nick');
 
 Irssi::signal_add('message public', 'sig_msg_pub');
+Irssi::signal_add('message own_public', 'sig_msg_own_pub');
 # Close DB when Irssi exiting. Is this right?
 Irssi::signal_add('gui exit', 'sig_irssi_quit');
 
