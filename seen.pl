@@ -5,6 +5,7 @@
 # Requirements:
 #  - DBD::SQLite
 #  - Date::Calc
+#  - List::MoreUtils
 #
 # This script watches for events on all channels and networks
 # and stores data regarding when users were last seen
@@ -32,9 +33,10 @@ use DBI;
 use Date::Calc qw(:all);
 use POSIX;
 use File::stat;
+use List::MoreUtils qw(uniq);
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "20100906";
+$VERSION = "20100912";
 %IRSSI = (
 	authors     => "Will Storey",
 	contact     => "will\@summercat.com",
@@ -51,8 +53,8 @@ create_table();
 
 my $sth_del = $dbh->prepare("DELETE FROM seen WHERE server = ? AND nick = ? AND uhost = ?");
 my $sth_add = $dbh->prepare("INSERT INTO seen VALUES(?, ?, ?, ?, ?)");
-my $sth_search_nick = $dbh->prepare("SELECT * FROM seen WHERE server = ? AND nick LIKE ? ORDER BY time DESC LIMIT 1");
-my $sth_search_host = $dbh->prepare("SELECT * FROM seen WHERE server = ? AND uhost LIKE ? ORDER BY time DESC LIMIT 1");
+my $sth_search_nick = $dbh->prepare("SELECT * FROM seen WHERE server = ? AND nick LIKE ? ORDER BY time DESC LIMIT 10");
+my $sth_search_host = $dbh->prepare("SELECT * FROM seen WHERE server = ? AND uhost LIKE ? ORDER BY time DESC LIMIT 10");
 
 sub create_table {
 	# Check if table exists
@@ -97,8 +99,8 @@ sub sig_msg_pub {
 		return;
 	}
 
-	# !seen with no arguments
 	my ($flags, $pattern) = $msg =~ /^[!\.]seen (-\S+)? ?(\S+)/i;
+	# !seen with no arguments
 	if (!$pattern) {
 		print_usage($server, $target) if $msg =~ /^[!\.]seen$/;
 		return;
@@ -116,21 +118,68 @@ sub sig_msg_pub {
 
 	$pattern =~ s/\*/%/g;
 	my $rv = $sth->execute($server->{tag}, $pattern);
-	my $row = $sth->fetchrow_hashref;
-	if (!$row) {
-		$server->command("msg $target No match found.");
-	} else {
-		# Search in channel for matched nick
-		my $channel = $server->channel_find($target);
-		my $found_nick = $channel->nick_find($row->{nick});
-		if ($found_nick) {
-			$server->command("msg $target Matched $row->{nick} who is in the channel already!");
-			return;
-		}
-		my $time = strftime "%c", localtime($row->{time});
-		my $time_since = time_since($row->{time});
-		$server->command("msg $target $row->{nick} ($row->{uhost}) was last seen $row->{desc} on $time ($time_since).");
+	my $output = build_output($sth, $server, $target);
+	$server->command("msg $target $output");
+}
+
+# Take a statement handler which has been execute()'d and build the seen
+# response
+sub build_output {
+	my ($sth, $server, $target) = @_;
+
+	# We show detailed information for the first result
+	my $first_row = $sth->fetchrow_hashref;
+	if (!$first_row) {
+		return "No match found.";
 	}
+
+	# First match details
+	my $details;
+	if (on_channel($server, $target, $first_row->{nick})) {
+		$details = "$first_row->{nick} is in the channel already.";
+	} else {
+		$details = build_details($first_row);
+	}
+	my $rest = build_rest($sth, $first_row->{nick});
+	my $output = "Most recent match: $details";
+	$output .= " Other matches:${rest}." if $rest;
+	return $output;
+}
+
+# Check whether nick is on given channel on given server
+sub on_channel {
+	my ($server, $target, $nick) = @_;
+	my $channel = $server->channel_find($target);
+	my $found_nick = $channel->nick_find($nick);
+	return $found_nick;
+}
+
+# Take a hash ref representing one seen entry and return specifics about
+# last seen
+sub build_details {
+	my ($h) = @_;
+	my $time = strftime "%c", localtime($h->{time});
+	my $time_since = time_since($h->{time});
+	return "$h->{nick} ($h->{uhost}) was last seen $h->{desc} on $time ($time_since).";
+}
+
+# Take statement handler with a possible 0 to 9 rows each representing
+# a nick. Return a string of these nicks
+# Do not include those that are equal to $first_nick
+sub build_rest {
+	my ($sth, $first_nick) = @_;
+	my @nicks;
+	while (my $row = $sth->fetchrow_hashref()) {
+		next if $first_nick eq $row->{nick};
+		push @nicks, $row->{nick};
+	}
+	my @unique_nicks = uniq(@nicks);
+	my $str = "";
+	foreach my $nick (@unique_nicks) {
+		$str .= " $nick,";
+	}
+	$str =~ s/,$//;
+	return $str;
 }
 
 # Check if given channel is in the settings string
