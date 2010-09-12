@@ -66,9 +66,13 @@ sub sig_irssi_quit {
 	$dbh->disconnect;
 }
 
-sub print_stats_usage {
+sub print_usage {
 	my ($server, $target) = @_;
 	$server->command("msg $target Usage: !seen [-nick | -host] <pattern>");
+}
+
+sub seen_stats {
+	my ($server, $target) = @_;
 	my $res = $dbh->selectall_arrayref("SELECT COUNT(*) AS count FROM seen");
 	my $count = $res->[0][0];
 	my $filesize = stat($dbfile)->size / 1024;
@@ -87,9 +91,16 @@ sub sig_msg_pub {
 	# Only trigger in enabled channels
 	return if !chan_in_settings_str("seen_trigger_channels", $target);
 
+	# !seenstats
+	if ($msg =~ /^!seenstats$/i) {
+		seen_stats($server, $target);
+		return;
+	}
+
+	# !seen with no arguments
 	my ($flags, $pattern) = $msg =~ /^[!\.]seen (-\S+)? ?(\S+)/i;
 	if (!$pattern) {
-		print_stats_usage($server, $target) if $msg =~ /^[!\.]seen$/;
+		print_usage($server, $target) if $msg =~ /^[!\.]seen$/;
 		return;
 	}
 
