@@ -127,4 +127,6 @@ Irssi::settings_add_str('allwin', 'allwin_msg_channel', '');
 
 Irssi::signal_add('message public', 'sig_msg_pub');
 Irssi::signal_add('message own_public', 'sig_msg_pub_own');
+Irssi::signal_add('message irc own_action', 'sig_msg_pub_own');
+Irssi::signal_add('message irc action', 'sig_msg_pub');
 Irssi::signal_add('send text', 'sig_window_text');
