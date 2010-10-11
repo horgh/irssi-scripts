@@ -9,7 +9,7 @@
 #
 # This script watches for events on all channels and networks
 # and stores data regarding when users were last seen
-
+#
 # Database is stored in ~/.irssi/seen.db
 #
 # Data information:
