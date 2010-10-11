@@ -93,6 +93,15 @@ sub cmd_list_ops {
 
 sub sig_msg_join {
 	my ($server, $channel, $nick, $address) = @_;
+
+	# Check if we are opped
+	my $own_nick = $server->{nick};
+	my $channel_object = $server->channel_find($channel);
+	my $nick_object = $channel_object->nick_find($own_nick);
+	if (!$nick_object->{op}) {
+		return;
+	}
+
 	my $rv = $sth_get->execute($server->{tag}, $channel);
 	while (my $row = $sth_get->fetchrow_hashref()) {
 		if ($server->mask_match_address($row->{mask}, $nick, $address)) {
