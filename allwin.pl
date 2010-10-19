@@ -83,6 +83,8 @@ sub sig_msg_pub {
 
 	# Check if channel is set as ignored
 	my $ignored_raw = Irssi::settings_get_str('allwin_ignore_channels');
+	# make sure to lowercase the channels
+	$ignored_raw = lc($ignored_raw);
 	my @ignored = split(/ /, $ignored_raw);
 	if (grep /$target/, @ignored) {
 		return;
