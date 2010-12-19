@@ -1,5 +1,5 @@
 #
-# 2010-09-06
+# Created 2010-09-06
 # by Will Storey
 #
 # Requirements:
@@ -24,6 +24,14 @@
 #  /set seen_untracked_channels #chan1 #chan2 ..
 #  List of channels where joins/parts/kicks are not tracked.
 #  Quits and nicks are currently always tracked.
+#
+# Commands:
+#  !seenstats/.seenstats
+#  Some information on the database
+#
+#  !seen/.seen <-nick | -host> <pattern>
+#  Searches for the most recent entries matching pattern on the network tag
+#  that matches where the command is issued.
 #
 
 use warnings;
@@ -94,7 +102,7 @@ sub sig_msg_pub {
 	return if !chan_in_settings_str("seen_trigger_channels", $target);
 
 	# !seenstats
-	if ($msg =~ /^!seenstats$/i) {
+	if ($msg =~ /^[!\.]seenstats$/i) {
 		seen_stats($server, $target);
 		return;
 	}
