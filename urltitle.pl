@@ -55,6 +55,7 @@ sub fetch_title {
 		# remove tabs within..
 		$title =~ s/[\t]+//g;
 
+		$title =~ s/\s+/ /g;
 		decode_entities($title);
 		return $title;
 	}
@@ -69,14 +70,17 @@ sub sig_msg_pub {
 	my @enabled = split(/ /, $enabled_raw);
 	return unless grep(/$target/, @enabled);
 
-	my $url;
+	my $url = "";
 	if ($msg =~ /(http:\/\/\S+)/i) {
 		$url = $1;
 	} elsif ($msg =~ /(https:\/\/\S+)/i) {
 		$url = $1;
 	} elsif ($msg =~ /(www\.\S+)/i) {
 		$url = "http://" . $1;
+	} else {
+		return;
 	}
+	#return unless $url =~ /https?:\/\/(www\.)?youtube\.com/i;
 	#my $thr = threads->create(sub { do_fetch($url, $target, $server); } );
 	#print($thr->join());
 	do_fetch($url, $target, $server);
