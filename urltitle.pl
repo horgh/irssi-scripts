@@ -34,6 +34,13 @@ $VERSION = "20100825";
 my $useragent = "Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6";
 my $ua = LWP::UserAgent->new('agent' => $useragent, max_size => 32768);
 
+# Try to disable cert checking (lwp versions > 5.837)
+eval {
+	$ua->ssl_opts('verify_hostname' => 0);
+	1;
+} or do {
+};
+
 sub fetch_title {
 	my ($url) = @_;
 
