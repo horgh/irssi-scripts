@@ -16,6 +16,7 @@ use warnings;
 use strict;
 use Irssi;
 use LWP::UserAgent;
+use HTTP::Cookies;
 use Crypt::SSLeay;
 use HTML::Entities;
 
@@ -31,8 +32,15 @@ $VERSION = "20100825";
 	changed     => $VERSION
 );
 
+my $cookie_file = Irssi::get_irssi_dir . '/lwp_cookies.dat';
+my $cookie_jar = HTTP::Cookies->new(
+	file => $cookie_file,
+	autosave => 1,
+);
+
 my $useragent = "Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.1.11) Gecko/20100721 Firefox/3.0.6";
 my $ua = LWP::UserAgent->new('agent' => $useragent, max_size => 32768);
+$ua->cookie_jar($cookie_jar);
 
 # Try to disable cert checking (lwp versions > 5.837)
 eval {
