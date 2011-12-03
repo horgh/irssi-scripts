@@ -6,6 +6,7 @@
 #  - DBD::SQLite
 #
 # Alias ident@hosts to nicks to display
+# This only replaces nicks in channels
 #
 # Database is stored in ~/.irssi/nickalias.db
 #
