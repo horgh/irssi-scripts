@@ -118,13 +118,20 @@ sub cmd_add_alias {
 
   # Query. Get the query's mask if 
   } else {
+    # Make sure query matches the nick we want to alias, otherwise we
+    # can't use its address!
+    if ($witem->{name} ne $nick) {
+      Irssi::print("Query's name does not match nick. Cannot find mask!");
+      return;
+    }
     $mask = $witem->{address};
   }
 
   # Make sure we got the mask...
   if (!$mask) {
-    Irssi::print("Could not find mask for $nick. Make sure you run this in "
+    Irssi::print("Could not find mask for $nick. Make sure you run this in"
                . " a channel or query where $nick may be found!");
+    Irssi::print("NOTE: to add from a query, your target must have messaged you.");
     return;
   }
 
