@@ -272,15 +272,15 @@ sub quote_id {
 sub quote_search {
   my ($server, $target, $string) = @_;
 
-  my $sql_string = $string;
+  my $sql_string = "%$string%";
   $sql_string =~ s/\*/%/g;
 
   if (!$search_quotes || !defined($search_quotes->{$string})
     || !$search_quotes->{$string})
   {
     Irssi::print("Fetching new quotes for search: $string");
-    my $sql = "SELECT * FROM quote WHERE quote LIKE '%$sql_string%' LIMIT 20";
-    my @params = ();
+    my $sql = "SELECT * FROM quote WHERE quote LIKE ? LIMIT 20";
+    my @params = ($sql_string);
     my $href = &db_select($sql, \@params);
     if (!$href || !%$href) {
       &msg($server, $target, "No quotes found matching *$string*.");
