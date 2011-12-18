@@ -189,7 +189,7 @@ sub spew_quote {
   $header .= ": *$search*" if $search;
   &msg($server, $target, $header);
 
-  foreach my $line (split /\n|\r|\n\r|\r\n/, $quote) {
+  foreach my $line (split /\n|\r/, $quote) {
     chomp $line;
     next if $line =~ /^\s*$/;
     &msg($server, $target, " $line");
@@ -323,6 +323,11 @@ sub handle_command {
   return &quote_search($server, $target, $1) if $msg =~ /^!?quote (.+)$/;
 }
 
+# @param string $settings_str  Name of the setting
+# @param string $channel       Channel name
+#
+# @return bool Whether channel is in the setting
+#
 # Check if given channel is in the settings string
 sub channel_in_settings_str {
 	my ($settings_str, $channel) = @_;
@@ -341,7 +346,9 @@ sub sig_msg_pub {
 
 sub sig_msg_own_pub {
   my ($server, $msg, $target) = @_;
-  &sig_msg_pub($server, $msg, "", "", $target);
+  # Only trigger in enabled channels
+  return if !&channel_in_settings_str('quote_channels', $target);
+  &handle_command($server, $target, $msg);
   return;
 }
 
