@@ -279,7 +279,7 @@ sub quote_search {
     || !$search_quotes->{$string})
   {
     Irssi::print("Fetching new quotes for search: $string");
-    my $sql = "SELECT * FROM quote WHERE quote LIKE ? LIMIT 20";
+    my $sql = "SELECT * FROM quote WHERE LOWER(quote) LIKE LOWER(?) LIMIT 20";
     my @params = ($sql_string);
     my $href = &db_select($sql, \@params);
     if (!$href || !%$href) {
