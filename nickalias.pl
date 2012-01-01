@@ -22,7 +22,7 @@ use Irssi;
 use DBI;
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "20101225";
+$VERSION = "20110312";
 %IRSSI = (
 	authors     => "Will Storey",
 	contact     => "will\@summercat.com",
