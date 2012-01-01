@@ -69,11 +69,9 @@ sub sig_message_join {
   my $channels_aref = &get_channels;
 
   return unless $channels_aref && @$channels_aref;
-
   return unless grep(/^$channel$/, @$channels_aref);
 
-  Irssi::print("joinserver: server problem") if !$server;
-  Irssi::print("joinserver: nick problem") if !$nick;
+  Irssi::print("joinserver: checking server of $nick ($channel)...");
 
   # send the whois
   # we use redirects to capture its output
