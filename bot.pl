@@ -55,6 +55,7 @@ $VERSION = "20120121";
 # suppress the Irssi::Nick warnings...
 # see http://bugs.irssi.org/index.php?do=details&task_id=242
 # and http://pound-perl.pm.org/code/irssi/autovoice.pl
+{ package Irssi::Nick }
 
 # @param string $msg
 #
