@@ -101,12 +101,14 @@ sub db_query {
 # @param string $sql             SQL to execute
 #                                Should be adequate for prepare()
 # @param array ref $paramsAref   Parameters to use
+# @param string $keyField        Column to use as key in hash. Optional.
+#                                Defaults to 'id'
 #
 # @return mixed int 0 if failure, or hash reference if success
 #
 # Execute and return rows from a SELECT query
 sub db_select {
-  my ($sql, $paramsAref) = @_;
+  my ($sql, $paramsAref, $keyField) = @_;
 
   my $sth = &db_query($sql, $paramsAref);
   if (!$sth) {
@@ -115,7 +117,11 @@ sub db_select {
   }
 
   # id = key field
-  my $href = $sth->fetchall_hashref('id');
+  my $key = 'id';
+  if ($keyField) {
+    $key = $keyField;
+  }
+  my $href = $sth->fetchall_hashref($key);
 
   # Check if successfully fetched href
   # Fetchall_hashref will have set dbh->err if so
@@ -155,6 +161,18 @@ sub msg {
   $server->command("MSG $target $msg");
 }
 
+# @return mixed int count of quotes or undef if failure
+#
+# count of quotes in the database
+sub get_quote_count {
+  my $sql = "SELECT COUNT(1) AS id FROM quote";
+  my @params = ();
+  my $href = &db_select($sql, \@params);
+  return undef unless $href && %$href && scalar(keys(%$href)) == 1;
+  my $count = (keys %$href)[0];
+  return $count;
+}
+
 # @param server $server
 # @param string $target
 #
@@ -164,11 +182,12 @@ sub msg {
 sub quote_stats {
   my ($server, $target) = @_;
 
-  my $sql = "SELECT COUNT(1) AS id FROM quote";
-  my @params = ();
-  my $href = &db_select($sql, \@params);
-  return unless $href;
-  my $count = (keys %$href)[0];
+  my $count = &get_quote_count;
+  if (!$count) {
+    &msg($server, $target, "Failed to get quote count.");
+    return;
+  }
+
   &msg($server, $target, "There are $count quotes in the database.");
   return;
 }
@@ -301,6 +320,47 @@ sub quote_search {
 
 # @param server $server
 # @param string $target
+# @param string $str      search string
+#
+# @return void
+sub quote_count {
+  my ($server, $target, $str) = @_;
+  # sql wildcard the string
+  my $sql_str = "%$str%";
+  $sql_str =~ s/\*/%/g;
+
+  # get the count of quotes matching the pattern
+  my $sql = 'SELECT COUNT(1) FROM quote WHERE LOWER(quote) LIKE LOWER(?)';
+  my @params = ($sql_str);
+  my $href = &db_select($sql, \@params, 'count');
+  if (!$href || !%$href) {
+    &msg($server, $target, "Failed to find count.");
+    return;
+  }
+  # one and only key of hash should be the count
+  if (scalar(keys(%$href)) != 1) {
+    &msg($server, $target, "Count not found.");
+    return;
+  }
+  my $count = (keys(%$href))[0];
+
+  # get the total count
+  my $total_count = &get_quote_count;
+  if (!$total_count) {
+    &msg($server, $target, "Failed to find total count of quotes.");
+    return;
+  }
+
+  # calculate %
+  my $percent = $count / $total_count * 100;
+  $percent = sprintf "%.2f", $percent;
+
+  &msg($server, $target, "There are $count/$total_count ($percent%) quotes matching *$str*.");
+  return;
+}
+
+# @param server $server
+# @param string $target
 # @param string $msg   Message on a channel enabled for triggers
 #
 # @return void
@@ -321,6 +381,9 @@ sub handle_command {
 
   # quote <search string>
   return &quote_search($server, $target, $1) if $msg =~ /^!?quote (.+)$/;
+
+  # quotecount <search string>
+  return &quote_count($server, $target, $1) if $msg =~ /^!?quotecount (.+)$/;
 }
 
 # @param string $settings_str  Name of the setting
