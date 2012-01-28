@@ -28,11 +28,8 @@ use Irssi;
 # config
 #
 
-# tag
-my $command_network = 'summercat';
-my $command_channel = '#newhell2';
-# check every 10 seconds
-my $delay = 10;
+# check every delay seconds
+my $delay = 120;
 
 #
 # done config
@@ -119,6 +116,13 @@ sub request_op {
 #
 # main function which is called repeatedly
 sub bot_loop {
+  my $command_network = Irssi::settings_get_str('bot_command_network');
+  my $command_channel = Irssi::settings_get_str('bot_command_channel');
+  if (!$command_network || !$command_channel) {
+    &log("bot_loop: command network or command channel not set!");
+    return;
+  }
+
   # find the command server
   my $command_server = Irssi::server_find_chatnet($command_network);
   if (!$command_server) {
@@ -209,6 +213,9 @@ sub do_opme {
 sub sig_msg_pub {
   my ($server, $msg, $nick, $address, $target) = @_;
   # must be on command network & channel
+  my $command_network = Irssi::settings_get_str('bot_command_network');
+  my $command_channel = Irssi::settings_get_str('bot_command_channel');
+  return unless $command_network && $command_channel;
   return unless $server->{chatnet} eq $command_network && $target eq $command_channel;
   if ($msg =~ /^(\S+) ?(.*)$/) {
     my $command = $1;
@@ -222,3 +229,7 @@ sub sig_msg_pub {
 
 $timeout_tag = Irssi::timeout_add($delay * 1000, 'bot_loop', undef);
 Irssi::signal_add('message public', 'sig_msg_pub');
+
+# command channel
+Irssi::settings_add_str('bot', 'bot_command_channel', '');
+Irssi::settings_add_str('bot', 'bot_command_network', '');
