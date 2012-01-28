@@ -4,20 +4,23 @@
 #
 # Simple botnet like behaviour
 #
-# All channels the client is in will be treated as botnet channels.
-# If the client isn't an op in a channel it will request to be opped.
+# All channels the client is in and set in the setting 'bot_channels' will
+# be treated as botnet channels.
+#
+# If the client isn't an op in a bot channel it will request to be opped.
+#
 # All clients must have the same network name for each network for this
 # to function.
 #
-# All bots in a defined command channel will try to op each other
+# All bots in a defined command channel will try to op each other.
 #
 # This works as follows:
-#  - periodically look at every channel we are in
+#  - periodically look at every bot channel we are in
 #  - if we are not opped in a channel, find our command channel
 #  - if we are not in the command channel, nothing to do
 #  - if we are in the command channel, send an op request which includes
-#    channel name and our nick
-#  - all bots other than self try to op me there if they are opped
+#    channel name, our nick, and the network
+#  - all bots other than self try to op me there if they are opped there
 #
 
 use warnings;
@@ -112,6 +115,31 @@ sub request_op {
   return;
 }
 
+# @return mixed array ref of channel objects or undef if failure
+#
+# look at the setting 'bot_channels' and find the channel objects
+# associated with them
+#
+# if a channel name is on multiple servers, return each one.
+sub get_bot_channels {
+  my @channels;
+  my $bot_channels_s = Irssi::settings_get_str('bot_channels');
+  foreach my $channel_name (split('/ /', $bot_channels_s)) {
+    # clean up the name
+    $channel_name = lc($channel_name);
+    $channel_name =~ s/^\s+//g;
+    $channel_name =~ s/\s+$//g;
+    next unless $channel_name;
+
+    # find the channel objects on every server we are on
+    foreach my $server (Irssi::servers) {
+      my $channel = $server->channel_find($channel_name);
+      push(@channels, $channel) if $channel;
+    }
+  }
+  return \@channels;
+}
+
 # @return void
 #
 # main function which is called repeatedly
@@ -137,9 +165,15 @@ sub bot_loop {
     return;
   }
 
-  # loop at every channel we are in
-  my @channels = Irssi::channels;
-  foreach my $channel (@channels) {
+  # get the bot channels
+  my $channels_aref = &get_bot_channels;
+  if (!$channels_aref || !@$channels_aref) {
+    &log("bot_loop: no bot channels found");
+    return;
+  }
+
+  # loop over every bot channel we are in
+  foreach my $channel (@$channels_aref) {
     # don't do anything with command channel
     next if $channel->{name} eq $c_channel->{name} && $channel->{server}->{chatnet} eq $c_channel->{server}->{chatnet};
 
@@ -233,3 +267,5 @@ Irssi::signal_add('message public', 'sig_msg_pub');
 # command channel
 Irssi::settings_add_str('bot', 'bot_command_channel', '');
 Irssi::settings_add_str('bot', 'bot_command_network', '');
+# channels to act as bot in
+Irssi::settings_add_str('bot', 'bot_channels', '');
