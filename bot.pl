@@ -22,23 +22,41 @@
 #    channel name, our nick, and the network
 #  - all bots other than self try to op me there if they are opped there
 #
+# Requirements:
+# - Crypt::OpenSSL::RSA - libcrypt-openssl-rsa-perl
+#
 
 use warnings;
 use strict;
 use Irssi;
+use Crypt::OpenSSL::RSA ();
+use Time::Local ();
+use MIME::Base64 ();
 
 #
 # config
 #
 
 # check every delay seconds
-my $delay = 120;
+my $delay = 10;
+# bot private + public key file
+my $my_key_file = Irssi::get_irssi_dir . '/bot.keys';
+# bot public key file
+my $pubkey_file = Irssi::get_irssi_dir . '/bot.pubkeys';
+# accept commands given within this number of seconds
+my $acceptable_delay = 30;
 
 #
 # done config
 #
 
+# timeout tag (from timeout_add())
 my $timeout_tag;
+# bot pubkeys
+my @pubkeys = ();
+# my priv/pub key
+my $privkey;
+my $pubkey;
 
 use vars qw($VERSION %IRSSI);
 $VERSION = "20120121";
@@ -111,7 +129,22 @@ sub request_op {
     return;
   }
 
-  $command_server->command("MSG $c_channel_name opme $network $channel_name $nick");
+  # time
+  my $time = Time::Local::timegm(gmtime());
+
+  # build the message we will send
+  my $msg = "opme $network $channel_name $nick $time";
+
+  # sign it
+  my $rsa = Crypt::OpenSSL::RSA->new_private_key($privkey);
+  my $signed_msg = $rsa->sign($msg);
+
+  # base64 encode whole thing (signature is non-ascii)
+  # (second param to encode is separator)
+  my $base64 = MIME::Base64::encode_base64("$msg $signed_msg", "");
+
+  # send it
+  $command_server->command("MSG $c_channel_name $base64");
   return;
 }
 
@@ -183,6 +216,24 @@ sub bot_loop {
   return;
 }
 
+# @param string $string
+# @param string $signature
+#
+# @return int 1 valid 0 invalid
+#
+# check whether the given string and signature are valid based on one of
+# our known pubkeys
+sub valid_signature {
+  my ($string, $signature) = @_;
+
+  # check it against every signature we know about
+  foreach my $pubkey (@pubkeys) {
+    my $rsa = Crypt::OpenSSL::RSA->new_public_key($pubkey);
+    return 1 if $rsa->verify($string, $signature);
+  }
+  return 0;
+}
+
 # @param string $params   portion of command after 'opme'
 #
 # @return void
@@ -196,19 +247,38 @@ sub do_opme {
   }
 
   # parse the params
+  # should be: 'network channel nick time signature'
   my $chatnet;
   my $channel_name;
   my $nick;
-  if ($params =~ /^(\S+) (\S+) (\S+)$/) {
+  my $time;
+  my $signature;
+  if ($params =~ /^(\S+) (\S+) (\S+) (\d+) (.*)$/) {
     $chatnet = $1;
     $channel_name = $2;
     $nick = $3;
+    $time = $4;
+    $signature = $5;
   } else {
     &log("do_opme: invalid opme params");
     return;
   }
 
   &log("do_opme: Trying to op $nick on $channel_name @ $chatnet");
+
+  # time must be within delta of current time for the command to be valid
+  my $current_time = Time::Local::timegm(gmtime());
+  if ($current_time - $time > $acceptable_delay) {
+    &log("do_opme: Invalid time in opme request, ignoring.");
+    return;
+  }
+
+  # verify the signature vs. the signed string
+  my $string = "opme $chatnet $channel_name $nick $time";
+  if (!&valid_signature($string, $signature)) {
+    &log("do_opme: Invalid signature found, ignoring.");
+    return;
+  }
 
   # find the server for this chatnet
   my $server = Irssi::server_find_chatnet($chatnet);
@@ -251,7 +321,14 @@ sub sig_msg_pub {
   my $command_channel = Irssi::settings_get_str('bot_command_channel');
   return unless $command_network && $command_channel;
   return unless $server->{chatnet} eq $command_network && $target eq $command_channel;
-  if ($msg =~ /^(\S+) ?(.*)$/) {
+
+  # commands will be base64 decoded
+  my $decoded = MIME::Base64::decode_base64($msg);
+  return unless $msg;
+  #&log("sig_msg_pub: decoded: $decoded");
+  
+  # parse the command
+  if ($decoded =~ /^(\S+) ?(.*)$/) {
     my $command = $1;
     my $params = $2;
 
@@ -259,6 +336,164 @@ sub sig_msg_pub {
       &do_opme($2);
     }
   }
+}
+
+# @return void
+#
+# generate a keypair and save it
+sub generate_keys {
+  if (-f $my_key_file) {
+    &log("generate_keys: key file already exists, aborting");
+    return;
+  }
+
+  # generate the keypair
+  &log("generate_keys: generating new keypair...");
+  my $rsa = Crypt::OpenSSL::RSA->generate_key(1024);
+
+  # write them to disk
+  my $fh;
+  if (!open($fh, '>', $my_key_file)) {
+    &log("generate_keys: could not open $my_key_file: $?");
+    return;
+  }
+
+  print { $fh } $rsa->get_private_key_string;
+  print { $fh } "\n";
+  print { $fh } $rsa->get_public_key_string;
+  close $fh;
+}
+
+# @param aref $linesAref
+#
+# @return mixed aref of strings or undef if failure
+#
+# split an array of lines into strings on blank lines
+sub split_on_blank_line {
+  my ($linesAref) = @_;
+  if (!$linesAref || !@$linesAref) {
+    &log("split_on_blank_line: invalid param");
+    return undef;
+  }
+
+  my @strings = ();
+  my $s = '';
+  foreach (@$linesAref) {
+    if (/^\s*$/) {
+      push(@strings, $s);
+      $s = '';
+      next;
+    }
+    $s .= $_;
+  }
+  # last key
+  push(@strings, $s) if $s;
+
+  return \@strings;
+}
+
+# @param string $fname
+#
+# @return mixed aref of lines from file or undef if failure
+#
+# read all of a file
+sub read_in_file {
+  my ($fname) = @_;
+  if (!$fname) {
+    &log("read_in_file: invalid filename");
+    return undef;
+  }
+  # load our keys from the file
+  my $fh;
+  if (!open($fh, '<', $fname)) {
+    &log("read_in_file: failed to open file: $fname: $?");
+    return undef;
+  }
+  my @lines = <$fh>;
+  close $fh;
+  return \@lines;
+}
+
+# @return int 1 success 0 failure
+#
+# load our keypair
+sub load_my_keys {
+  # if we don't have a key file for ourself, generate
+  if (! -f $my_key_file) {
+    &generate_keys;
+  }
+
+  # now we should have a key file. read it
+  my $linesAref = &read_in_file($my_key_file);
+  if (!$linesAref || !@$linesAref) {
+    &log("load_my_keys: failed to get content of my key file");
+    return 0;
+  }
+
+  # split on a blank line (private, blank line, public)
+  my $keysAref = &split_on_blank_line($linesAref);
+  if (!$keysAref || !@$keysAref || scalar(@$keysAref) != 2) {
+    &log("load_my_keys: did not find necessary keys");
+    return 0;
+  }
+
+  $privkey = $keysAref->[0];
+  $pubkey = $keysAref->[1];
+  &log("load_my_keys: loaded my keypair.");
+  return 1;
+}
+
+# @return int 1 success 0 failure
+#
+# load other bot pubkeys
+sub load_pubkeys {
+  if (! -f $pubkey_file || ! -r $pubkey_file) {
+    &log("load_pubkeys: pubkey file not found: $pubkey_file");
+    return 0;
+  }
+
+  # read content of file
+  my $linesAref = &read_in_file($pubkey_file);
+  if (!$linesAref || !@$linesAref) {
+    &log("load_pubkeys: no pubkeys found");
+    return 0;
+  }
+
+  # keys are separated by a blank line
+  my $keysAref = &split_on_blank_line($linesAref);
+  if (!$keysAref || !@$keysAref) {
+    &log("load_pubkeys: no pubkeys found (2)");
+    return 0;
+  }
+
+  my $count = 0;
+  foreach my $key (@$keysAref) {
+    chomp $key;
+    push(@pubkeys, $key);
+    ++$count;
+  }
+  &log("cmd_load_bot_keys: $count public keys loaded.");
+  return 1;
+}
+
+# @return void
+#
+# load our private + public key and public keys for all bots
+sub cmd_load_bot_keys {
+  my ($data, $server, $witem) = @_;
+
+  @pubkeys = ();
+  $privkey = '';
+  $pubkey = '';
+
+  # load my priv/pub key
+  if (!&load_my_keys) {
+    &log("cmd_load_bot_keys: failed to load my keys");
+    return;
+  }
+
+  # load other bot keys
+  &load_pubkeys;
 }
 
 $timeout_tag = Irssi::timeout_add($delay * 1000, 'bot_loop', undef);
@@ -269,3 +504,9 @@ Irssi::settings_add_str('bot', 'bot_command_channel', '');
 Irssi::settings_add_str('bot', 'bot_command_network', '');
 # channels to act as bot in
 Irssi::settings_add_str('bot', 'bot_channels', '');
+
+# commands
+Irssi::command_bind('load_bot_keys', 'cmd_load_bot_keys');
+
+# load keys on load
+&cmd_load_bot_keys;
