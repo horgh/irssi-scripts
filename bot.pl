@@ -45,6 +45,8 @@ my $my_key_file = Irssi::get_irssi_dir . '/bot.keys';
 my $pubkey_file = Irssi::get_irssi_dir . '/bot.pubkeys';
 # accept commands given within this number of seconds
 my $acceptable_delay = 30;
+# script used to verify sigs
+my $verify_script = Irssi::get_irssi_dir . '/bot_verify.pl';
 
 #
 # done config
@@ -157,7 +159,7 @@ sub request_op {
 sub get_bot_channels {
   my @channels;
   my $bot_channels_s = Irssi::settings_get_str('bot_channels');
-  foreach my $channel_name (split('/ /', $bot_channels_s)) {
+  foreach my $channel_name (split(/ /, $bot_channels_s)) {
     # clean up the name
     $channel_name = lc($channel_name);
     $channel_name =~ s/^\s+//g;
@@ -165,7 +167,7 @@ sub get_bot_channels {
     next unless $channel_name;
 
     # find the channel objects on every server we are on
-    foreach my $server (Irssi::servers) {
+    foreach my $server (Irssi::servers()) {
       my $channel = $server->channel_find($channel_name);
       push(@channels, $channel) if $channel;
     }
@@ -226,10 +228,62 @@ sub bot_loop {
 sub valid_signature {
   my ($string, $signature) = @_;
 
+  if (!$string || !$signature) {
+    &log("valid_signature: invalid param");
+    return 0;
+  }
+
+  if (! -f $verify_script || ! -x $verify_script) {
+    &log("valid_signature: cannot find verify script at $verify_script");
+    return 0;
+  }
+
+  #&log("valid_signature: string: $string signature: $signature");
+
+  # open process to verify script to pipe stdin
+  my $fh;
+  if (!open($fh, '|-', $verify_script)) {
+    &log("valid_signature: failed to open process");
+    return 0;
+  }
+  # print each pubkey to its stdin
+  foreach my $pubkey (@pubkeys) {
+    print { $fh } "$pubkey\n\n";
+  }
+  # and the plaintext
+  print { $fh } "$string\n";
+  # and the signature in base64 (since it could have newlines in it)
+  my $signature_b64 = MIME::Base64::encode_base64("$signature", "");
+  print { $fh } "$signature_b64";
+  # returns false if nonzero exit code when using a process
+  if (!close($fh)) {
+    &log("valid_signature: failed to verify signature: exit code $? " . ($? & 127));
+    return 0;
+  }
+  return 1;
+
+  # XXX old way
   # check it against every signature we know about
   foreach my $pubkey (@pubkeys) {
-    my $rsa = Crypt::OpenSSL::RSA->new_public_key($pubkey);
-    return 1 if $rsa->verify($string, $signature);
+    &log("valid_signature: pubkey: $pubkey");
+
+    # wrap in eval since it can kill us
+    my $res = eval {
+      #no warnings 'all';
+      no warnings;
+      my $rsa = Crypt::OpenSSL::RSA->new_public_key($pubkey);
+      # this will be return value
+      $rsa->verify($string, $signature);
+    };
+    # if error, this var is set
+    if ($@) {
+      &log("valid_signature: rsa failed: $@");
+      next;
+    }
+    if ($res) {
+      return 0;
+      #return 1;
+    }
   }
   return 0;
 }
@@ -253,7 +307,7 @@ sub do_opme {
   my $nick;
   my $time;
   my $signature;
-  if ($params =~ /^(\S+) (\S+) (\S+) (\d+) (.*)$/) {
+  if ($params =~ /^(\S+) (\S+) (\S+) (\d+) (.*)$/s) {
     $chatnet = $1;
     $channel_name = $2;
     $nick = $3;
@@ -328,7 +382,7 @@ sub sig_msg_pub {
   #&log("sig_msg_pub: decoded: $decoded");
   
   # parse the command
-  if ($decoded =~ /^(\S+) ?(.*)$/) {
+  if ($decoded =~ /^(\S+) ?(.*)$/s) {
     my $command = $1;
     my $params = $2;
 
@@ -336,6 +390,7 @@ sub sig_msg_pub {
       &do_opme($2);
     }
   }
+  return;
 }
 
 # @return void
