@@ -60,9 +60,9 @@ sub log {
 
 # @return mixed DBI handle or undef
 sub get_dbh {
-  if (!$dbh) {
+  if (!$dbh || !$dbh->ping) {
     $dbh = DBI->connect($dsn, $DB_USER, $DB_PASS);
-    if (!$dbh) {
+    if (!$dbh || !$dbh->ping) {
       return undef;
     }
   }
