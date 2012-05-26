@@ -16,8 +16,10 @@
 
 use warnings;
 use strict;
+
 use DBI ();
-use Irssi;
+use Irssi ();
+use DateTime::Format::Pg ();
 
 # Config
 
@@ -55,6 +57,9 @@ my $search_quotes;
 # @return void
 sub log {
   my ($msg) = @_;
+  if (!$msg) {
+    $msg = "log: no log message given!";
+  }
   Irssi::print($msg);
 }
 
@@ -72,28 +77,32 @@ sub get_dbh {
 # @param string $sql         SQL to execute
 # @param aref $paramsAref    Params given to the prepared statement
 #
-# @return mixed DBI statement handle object, or 0 if failure
+# @return mixed DBI statement handle object, or undef if failure
 #
 # Executes a query and returns the sth
 # Lowest level DB interaction
 sub db_query {
   my ($sql, $paramsAref) = @_;
+  if (!$sql || !$paramsAref) {
+    &log("db_query: invalid param");
+    return undef;
+  }
 
   my $dbh = &get_dbh;
   if (!$dbh || !$dbh->ping) {
     &log("db_query: failure getting dbh");
-    return 0;
+    return undef;
   }
 
   my $sth = $dbh->prepare($sql);
   if (!$sth) {
     &log("db_query: failure preparing sql: $sql : " . $dbh->errstr);
-    return 0;
+    return undef;
   }
 
   if (!$sth->execute(@$paramsAref)) {
     &log("db_query: failure executing sql: $sql : " . $sth->errstr);
-    return 0;
+    return undef;
   }
   return $sth;
 }
@@ -102,18 +111,23 @@ sub db_query {
 #                                Should be adequate for prepare()
 # @param array ref $paramsAref   Parameters to use
 # @param string $keyField        Column to use as key in hash. Optional.
-#                                Defaults to 'id'
+#                                Defaults to 'id'.
 #
-# @return mixed int 0 if failure, or hash reference if success
+# @return mixed undef if failure, or hash reference if success
 #
 # Execute and return rows from a SELECT query
 sub db_select {
   my ($sql, $paramsAref, $keyField) = @_;
+  # keyField is optional
+  if (!$sql || !$paramsAref) {
+    &log("db_select: invalid param");
+    return undef;
+  }
 
   my $sth = &db_query($sql, $paramsAref);
   if (!$sth) {
     &log("db_select: failure executing query");
-    return 0;
+    return undef;
   }
 
   # id = key field
@@ -128,7 +142,7 @@ sub db_select {
   my $dbh = &get_dbh;
   if (!$dbh || $dbh->err) {
     &log("db_select: Failure fetching results of SQL: $sql " . $dbh->errstr);
-    return 0;
+    return undef;
   }
   return $href;
 }
@@ -136,16 +150,20 @@ sub db_select {
 # @param string $sql
 # @param aref $paramsAref
 #
-# @return int -1 if failure, number of rows affected if success
+# @return undef if failure, number of rows affected if success
 #
 # Perform a data changing query, such as UPDATE, DELETE, INSERT
 sub db_manipulate {
   my ($sql, $paramsAref) = @_;
+  if (!$sql || !$paramsAref) {
+    &log("db_manipulate: invalid param");
+    return undef;
+  }
 
   my $sth = &db_query($sql, $paramsAref);
   if (!$sth) {
     &log("db_manipulate: failure executing query");
-    return -1;
+    return undef;
   }
   return $sth->rows;
 }
@@ -158,6 +176,11 @@ sub db_manipulate {
 # @return void
 sub msg {
   my ($server, $target, $msg) = @_;
+  if (!$server || !$target || !$msg) {
+    &log("msg: invalid param");
+    return;
+  }
+
   $server->command("MSG $target $msg");
 }
 
@@ -165,7 +188,9 @@ sub msg {
 #
 # count of quotes in the database
 sub get_quote_count {
-  my $sql = "SELECT COUNT(1) AS id FROM quote";
+  my $sql = qq/
+SELECT COUNT(1) AS id FROM quote
+/;
   my @params = ();
   my $href = &db_select($sql, \@params);
   return undef unless $href && %$href && scalar(keys(%$href)) == 1;
@@ -181,6 +206,10 @@ sub get_quote_count {
 # Get database stats
 sub quote_stats {
   my ($server, $target) = @_;
+  if (!$server || !$target) {
+    &log("quote_stats: invalid param");
+    return;
+  }
 
   my $count = &get_quote_count;
   if (!$count) {
@@ -189,31 +218,39 @@ sub quote_stats {
   }
 
   &msg($server, $target, "There are $count quotes in the database.");
-  return;
 }
 
 # @param server $server
 # @param string $target
-# @param int $id          Quote id
-# @param string $quote    Quote content
-# @param string $left     Number of quotes left of this search
-# @param string $search   Search string
+# @param href $quote_href   Quote information from the database
+# @param string $left       Number of quotes left of this search
+# @param string $search     Search string
 #
 # @return void
 sub spew_quote {
-  my ($server, $target, $id, $quote, $left, $search) = @_;
+  my ($server, $target, $quote_href, $left, $search) = @_;
+  # left, search are optional
+  if (!$server || !$target || !$quote_href) {
+    &log("spew_quote: invalid param");
+    return;
+  }
 
-  my $header = "Quote #\002$id\002";
-  $header .= " ($left left)" if $left;
-  $header .= ": *$search*" if $search;
+  my $header = "Quote #\002" . $quote_href->{id} . "\002";
+  $header .= " ($left left)" if defined $left;
+  $header .= ": *$search*" if defined $search;
   &msg($server, $target, $header);
 
-  foreach my $line (split /\n|\r/, $quote) {
+  # date line
+  my $dt_parser = DateTime::Format::Pg->parse_timestamp($quote_href->{create_time});
+  my $date = DateTime::Format::Pg->format_date($dt_parser);
+  my $date_header = "Date: $date";
+  &msg($server, $target, $date_header);
+
+  foreach my $line (split /\n|\r/, $quote_href->{quote}) {
     chomp $line;
     next if $line =~ /^\s*$/;
     &msg($server, $target, " $line");
   }
-  return;
 }
 
 # @param server $server
@@ -224,8 +261,14 @@ sub spew_quote {
 # Get latest quote
 sub quote_latest {
   my ($server, $target) = @_;
+  if (!$server || !$target) {
+    &log("quote_latest: invalid param");
+    return;
+  }
 
-  my $sql = "SELECT * FROM quote ORDER BY id DESC LIMIT 1";
+  my $sql = qq/
+SELECT * FROM quote ORDER BY id DESC LIMIT 1
+/;
   my @params = ();
   my $href = &db_select($sql, \@params);
   return unless $href;
@@ -233,9 +276,52 @@ sub quote_latest {
   my $id = (keys %$href)[0];
   return unless $id;
 
-  my $quote = $href->{$id}->{quote};
-  &spew_quote($server, $target, $id, $quote);
-  return;
+  my $quote_href = $href->{$id};
+  &spew_quote($server, $target, $quote_href);
+}
+
+# @param server $server
+# @param string $target
+# @param string $search   search string
+#
+# @return void
+#
+# find the latest quote with the given search string and spew it
+sub quote_latest_search {
+  my ($server, $target, $search) = @_;
+  if (!$server || !$target || !defined $search) {
+    &log("quote_latest_search: invalid param");
+    return;
+  }
+
+  # convert to sql wildcard
+  my $sql_search = "%$search%";
+  $sql_search =~ s/\*/%/g;
+
+  my $sql = qq/
+SELECT * FROM quote
+WHERE LOWER(quote) LIKE LOWER(?)
+ORDER BY id DESC
+LIMIT 1
+/;
+  my @params = (
+                $sql_search,
+               );
+  my $href = &db_select($sql, \@params);
+  if (!$href || !%$href) {
+    &msg($server, $target, "No quotes found matching *$search*.");
+    return;
+  }
+
+  # find the only key in the hash
+  my $id = (keys %$href)[0];
+  if (!defined $id) {
+    &log("quote_latest_search: no id found");
+    return;
+  }
+
+  my $quote_href = $href->{$id};
+  &spew_quote($server, $target, $quote_href);
 }
 
 # @param server $server
@@ -246,20 +332,31 @@ sub quote_latest {
 # Get a random quote
 sub quote_random {
   my ($server, $target) = @_;
+  if (!$server || !$target) {
+    &log("quote_random: invalid param");
+    return;
+  }
 
+  # check if we need to fetch more quotes into the global cache
   if (!$random_quotes || !%$random_quotes) {
-    Irssi::print("quote_random: Fetching new random quotes.");
-    my $sql = "SELECT * FROM quote ORDER BY random() LIMIT 20";
+    &log("quote_random: Fetching new random quotes.");
+    my $sql = qq/
+SELECT * FROM quote ORDER BY random() LIMIT 20
+/;
     my @params = ();
     my $href = &db_select($sql, \@params);
     return unless $href;
+
+    # set the global cache
     $random_quotes = $href;
   }
+
+  # pull a quote out of the global cache
   my $id = (keys %$random_quotes)[0];
-  my $quote = $random_quotes->{$id}->{quote};
+  my $quote_href = $random_quotes->{$id};
   delete $random_quotes->{$id};
-  &spew_quote($server, $target, $id, $quote);
-  return;
+
+  &spew_quote($server, $target, $quote_href);
 }
 
 # @param server $server
@@ -269,8 +366,14 @@ sub quote_random {
 # @return void
 sub quote_id {
   my ($server, $target, $id) = @_;
+  if (!$server || !$target || !defined $id) {
+    &log("quote_id: invalid param");
+    return;
+  }
 
-  my $sql = "SELECT * FROM quote WHERE id = ?";
+  my $sql = qq/
+SELECT * FROM quote WHERE id = ?
+/;
   my @params = ($id);
   my $href = &db_select($sql, \@params);
   if (!$href || !%$href || !defined($href->{$id})) {
@@ -278,44 +381,54 @@ sub quote_id {
     return;
   }
 
-  my $quote = $href->{$id}->{quote};
-  &spew_quote($server, $target, $id, $quote);
-  return;
+  my $quote_href = $href->{$id};
+  &spew_quote($server, $target, $quote_href);
 }
 
 # @param server $server
 # @param string $target
-# @param string $search   Search string
+# @param string $string   Search string
 #
 # @return void
 sub quote_search {
   my ($server, $target, $string) = @_;
+  if (!$server || !$target || !defined $string) {
+    &log("quote_search: invalid param");
+    return;
+  }
 
   my $sql_string = "%$string%";
   $sql_string =~ s/\*/%/g;
 
+  # check whether the global cache has a result for this search
   if (!$search_quotes || !defined($search_quotes->{$string})
     || !$search_quotes->{$string})
   {
-    Irssi::print("Fetching new quotes for search: $string");
-    my $sql = "SELECT * FROM quote WHERE LOWER(quote) LIKE LOWER(?) LIMIT 20";
+    &log("Fetching new quotes for search: $string");
+    my $sql = qq/
+SELECT * FROM quote WHERE LOWER(quote) LIKE LOWER(?) LIMIT 20
+/;
     my @params = ($sql_string);
     my $href = &db_select($sql, \@params);
     if (!$href || !%$href) {
       &msg($server, $target, "No quotes found matching *$string*.");
       return;
     }
+
+    # place the result in the global cache
     $search_quotes->{$string} = $href;
   }
+
+  # pull a result out of the global cache
   my $id = (keys %{$search_quotes->{$string}})[0];
-  my $quote = $search_quotes->{$string}->{$id}->{quote};
+  my $quote_href = $search_quotes->{$string}->{$id};
   delete $search_quotes->{$string}->{$id};
 
+  # remove the cache key for this search if there are none remaining
   my $count_left = scalar (keys %{$search_quotes->{$string}});
   delete $search_quotes->{$string} if $count_left == 0;
 
-  &spew_quote($server, $target, $id, $quote, $count_left, $string);
-  return;
+  &spew_quote($server, $target, $quote_href, $count_left, $string);
 }
 
 # @param server $server
@@ -325,12 +438,19 @@ sub quote_search {
 # @return void
 sub quote_count {
   my ($server, $target, $str) = @_;
+  if (!$server || !$target || !defined $str) {
+    &log("quote_count: invalid param");
+    return;
+  }
+
   # sql wildcard the string
   my $sql_str = "%$str%";
   $sql_str =~ s/\*/%/g;
 
   # get the count of quotes matching the pattern
-  my $sql = 'SELECT COUNT(1) FROM quote WHERE LOWER(quote) LIKE LOWER(?)';
+  my $sql = qq/
+SELECT COUNT(1) FROM quote WHERE LOWER(quote) LIKE LOWER(?)
+/;
   my @params = ($sql_str);
   my $href = &db_select($sql, \@params, 'count');
   if (!$href || !%$href) {
@@ -356,7 +476,6 @@ sub quote_count {
   $percent = sprintf "%.2f", $percent;
 
   &msg($server, $target, "There are $count/$total_count ($percent%) quotes matching *$str*.");
-  return;
 }
 
 # @param server $server
@@ -366,12 +485,19 @@ sub quote_count {
 # @return void
 sub handle_command {
   my ($server, $target, $msg) = @_;
+  if (!$server || !$target || !defined $msg) {
+    &log("handle_command: invalid param");
+    return;
+  }
 
   # quotestats
   return &quote_stats($server, $target) if $msg =~ /^!?quotestats$/;
 
   # latest
   return &quote_latest($server, $target) if $msg =~ /^!?latest$/;
+
+  # latest <search string>
+  return &quote_latest_search($server, $target, $1) if $msg =~ /^!?latest (.+)$/;
 
   # quote
   return &quote_random($server, $target) if $msg =~ /^!?quote$/;
@@ -394,25 +520,50 @@ sub handle_command {
 # Check if given channel is in the settings string
 sub channel_in_settings_str {
 	my ($settings_str, $channel) = @_;
+  if (!$settings_str || !$channel) {
+    &log("channel_in_settings_str: invalid param");
+    return 0;
+  }
+
 	my $raw_settings_str = Irssi::settings_get_str($settings_str);
 	my @settings = split / /, $raw_settings_str;
 	return grep /$channel/, @settings;
 }
 
+# @param server $server
+# @param string $msg
+# @param string $nick
+# @param string $address
+# @param string $target
+#
+# @return void
 sub sig_msg_pub {
   my ($server, $msg, $nick, $address, $target) = @_;
+  if (!$server || !defined $msg || !$nick || !$address || !$target) {
+    &log("sig_msg_pub: invalid param");
+    return;
+  }
+
   # Only trigger in enabled channels
-  return if !&channel_in_settings_str('quote_channels', $target);
+  return unless &channel_in_settings_str('quote_channels', $target);
   &handle_command($server, $target, $msg);
-  return;
 }
 
+# @param server $server
+# @param string $msg
+# @param string $target
+#
+# @return void
 sub sig_msg_own_pub {
   my ($server, $msg, $target) = @_;
+  if (!$server || !defined $msg || !$target) {
+    &log("sig_msg_own_pub: invalid param");
+    return;
+  }
+
   # Only trigger in enabled channels
-  return if !&channel_in_settings_str('quote_channels', $target);
+  return unless &channel_in_settings_str('quote_channels', $target);
   &handle_command($server, $target, $msg);
-  return;
 }
 
 Irssi::signal_add('message public', 'sig_msg_pub');
