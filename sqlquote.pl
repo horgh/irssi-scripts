@@ -406,7 +406,7 @@ sub quote_search {
   {
     &log("Fetching new quotes for search: $string");
     my $sql = qq/
-SELECT * FROM quote WHERE LOWER(quote) LIKE LOWER(?) LIMIT 20
+SELECT * FROM quote WHERE LOWER(quote) LIKE LOWER(?)
 /;
     my @params = ($sql_string);
     my $href = &db_select($sql, \@params);
