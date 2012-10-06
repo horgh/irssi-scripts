@@ -9,6 +9,7 @@
 #  id SERIAL,
 #  create_time TIMESTAMP DEFAULT current_timestamp,
 #  quote VARCHAR NOT NULL,
+#  added_by VARCHAR NOT NULL,
 #  UNIQUE (quote),
 #  PRIMARY KEY (id)
 # );
@@ -245,6 +246,10 @@ sub spew_quote {
   my $date = DateTime::Format::Pg->format_date($dt_parser);
   my $date_header = "Date: $date";
   &msg($server, $target, $date_header);
+
+  # added by line
+  my $added_by = "Added by: " . $quote_href->{added_by};
+  &msg($server, $target, $added_by);
 
   foreach my $line (split /\n|\r/, $quote_href->{quote}) {
     chomp $line;
