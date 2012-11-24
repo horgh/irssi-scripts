@@ -495,26 +495,31 @@ sub handle_command {
     return;
   }
 
+  # trim whitespace
+  $msg =~ s/^\s+//;
+  $msg =~ s/\s+$//;
+
   # quotestats
-  return &quote_stats($server, $target) if $msg =~ /^!?quotestats$/;
+  return &quote_stats($server, $target)if $msg =~ /^!?quotestats$/;
 
   # latest
   return &quote_latest($server, $target) if $msg =~ /^!?latest$/;
 
   # latest <search string>
-  return &quote_latest_search($server, $target, $1) if $msg =~ /^!?latest (.+)$/;
+  return &quote_latest_search($server, $target, $1)
+    if $msg =~ /^!?latest\s+(.+)$/;
 
   # quote
   return &quote_random($server, $target) if $msg =~ /^!?quote$/;
 
   # quote <#>
-  return &quote_id($server, $target, $1) if $msg =~ /^!?quote (\d+)$/;
+  return &quote_id($server, $target, $1) if $msg =~ /^!?quote\s+(\d+)$/;
 
   # quote <search string>
-  return &quote_search($server, $target, $1) if $msg =~ /^!?quote (.+)$/;
+  return &quote_search($server, $target, $1) if $msg =~ /^!?quote\s+(.+)$/;
 
   # quotecount <search string>
-  return &quote_count($server, $target, $1) if $msg =~ /^!?quotecount (.+)$/;
+  return &quote_count($server, $target, $1) if $msg =~ /^!?quotecount\s+(.+)$/;
 }
 
 # @param string $settings_str  Name of the setting
