@@ -495,6 +495,70 @@ SELECT COUNT(1) FROM quote WHERE LOWER(quote) LIKE LOWER(?)
 }
 
 # @param server $server
+# @param string $target   channel
+#
+# @return void
+#
+# output information about our stored state/memory
+sub quote_memory {
+  my ($server, $target) = @_;
+  if (!$server || !$target) {
+    &log("invalid parameter");
+    return;
+  }
+
+  # find how many random quotes currently cached.
+  my $random_quote_count = 0;
+  $random_quote_count = scalar (keys %$random_quotes) if $random_quotes;
+
+  # find how many search strings stored.
+  my $search_string_count = 0;
+  $search_string_count = scalar (keys %$search_quotes) if $search_quotes;
+
+  # find how many quotes are stored for all search strings.
+  my $search_quote_count = 0;
+  if ($search_quotes) {
+    foreach my $str (keys %$search_quotes) {
+      my $search_href = $search_quotes->{$str};
+      $search_quote_count += scalar (keys $search_href);
+    }
+  }
+
+  my $total_quote_count = $random_quote_count + $search_quote_count;
+
+  my @msgs = (
+    qq/Currently caching $total_quote_count quotes:/,
+    qq/    $random_quote_count random quotes/,
+    qq/    $search_quote_count search results for $search_string_count/
+        . qq/ search strings/,
+  );
+
+  foreach my $msg (@msgs) {
+    &msg($server, $target, $msg);
+  }
+}
+
+# @param server $server
+# @param string $target   channel
+#
+# @return void
+#
+# free cached quotes.
+sub quote_free {
+  my ($server, $target) = @_;
+  if (!$server || !$target) {
+    &log("invalid parameter");
+    return;
+  }
+
+  # free the cached quotes by unsetting the global hashes which hold
+  # the cached results.
+  $random_quotes = undef;
+  $search_quotes = undef;
+  &msg($server, $target, "Quote cache cleared.");
+}
+
+# @param server $server
 # @param string $target
 # @param string $msg   Message on a channel enabled for triggers
 #
@@ -531,6 +595,12 @@ sub handle_command {
 
   # quotecount <search string>
   return &quote_count($server, $target, $1) if $msg =~ /^!?quotecount\s+(.+)$/;
+
+  # quotememory
+  return &quote_memory($server, $target) if $msg =~ /^!?quotememory$/;
+
+  # quotefree
+  return &quote_free($server, $target) if $msg =~ /^!?quotefree$/;
 }
 
 # @param string $settings_str  Name of the setting
