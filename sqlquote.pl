@@ -195,6 +195,17 @@ sub msg {
   $server->command("MSG $target $msg");
 }
 
+# @return void
+#
+# clear the quote cache.
+sub clear_quote_cache {
+  # free the cached quotes by unsetting the global hashes which hold
+  # the cached results.
+  $random_quotes = undef;
+  $search_quotes = undef;
+  &log("Quote cache cleared.");
+}
+
 # @return mixed int count of quotes or undef if failure
 #
 # count of quotes in the database
@@ -551,10 +562,7 @@ sub quote_free {
     return;
   }
 
-  # free the cached quotes by unsetting the global hashes which hold
-  # the cached results.
-  $random_quotes = undef;
-  $search_quotes = undef;
+  &clear_quote_cache;
   &msg($server, $target, "Quote cache cleared.");
 }
 
@@ -661,3 +669,7 @@ Irssi::signal_add('message public', 'sig_msg_pub');
 Irssi::signal_add('message own_public', 'sig_msg_own_pub');
 
 Irssi::settings_add_str('quote', 'quote_channels', '');
+
+# timer to clear the quote cache every 24 hours.
+# timer takes time to run in milliseconds.
+Irssi::timeout_add(24*60*60*1000, 'clear_quote_cache', '');
