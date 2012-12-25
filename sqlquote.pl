@@ -643,6 +643,8 @@ sub sig_msg_pub {
     return;
   }
 
+  $msg = lc $msg;
+
   # Only trigger in enabled channels
   return unless &channel_in_settings_str('quote_channels', $target);
   &handle_command($server, $target, $msg);
@@ -659,6 +661,9 @@ sub sig_msg_own_pub {
     &log("invalid param");
     return;
   }
+
+  # we WANT case sensitivity for own messages, or else we print
+  # out quotes again due to the 'Quote #' quote header.
 
   # Only trigger in enabled channels
   return unless &channel_in_settings_str('quote_channels', $target);
