@@ -423,7 +423,7 @@ sub sql_like_escape {
   }
 
   # _ and % are special characters for ILIKE, so escape them.
-  $pattern =~ s/(_|%)/\\$1/g;
+  $pattern =~ s/(_|%|\\)/\\$1/g;
   # we want *$pattern*
   $pattern = "%$pattern%";
   # we use '*' wildcarding.
