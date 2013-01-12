@@ -308,34 +308,31 @@ SELECT * FROM quote ORDER BY id DESC LIMIT 1
 
 # @param server $server
 # @param string $target
-# @param string $search   search string
+# @param string $pattern Search string
 #
 # @return void
 #
 # find the latest quote with the given search string and spew it
 sub quote_latest_search {
-  my ($server, $target, $search) = @_;
-  if (!$server || !$target || !defined $search) {
+  my ($server, $target, $pattern) = @_;
+  if (!$server || !$target || !defined $pattern) {
     &log("invalid param");
     return;
   }
 
   # convert to sql wildcard
-  my $sql_search = "%$search%";
-  $sql_search =~ s/\*/%/g;
+  my $sql_pattern = &sql_like_escape($pattern);
 
   my $sql = qq/
 SELECT * FROM quote
-WHERE LOWER(quote) LIKE LOWER(?)
+WHERE quote ILIKE ?
 ORDER BY id DESC
 LIMIT 1
 /;
-  my @params = (
-                $sql_search,
-               );
+  my @params = ($sql_pattern);
   my $href = &db_select($sql, \@params);
   if (!$href || !%$href) {
-    &msg($server, $target, "No quotes found matching *$search*.");
+    &msg($server, $target, "No quotes found matching *$pattern*.");
     return;
   }
 
@@ -411,73 +408,92 @@ SELECT * FROM quote WHERE id = ?
   &spew_quote($server, $target, $quote_href);
 }
 
-# @param server $server
-# @param string $target
-# @param string $string   Search string
+# @param string $pattern Search string pattern
 #
-# @return void
-sub quote_search {
-  my ($server, $target, $string) = @_;
-  if (!$server || !$target || !defined $string) {
+# @return string the pattern escaped and wrapped in sql LIKE wildcards
+#
+# escape a string that will be used as the pattern for an sql LIKE
+# query. also wrap the query in % so we do wildcard matching correctly,
+# and translate '*' to '%'.
+sub sql_like_escape {
+  my ($pattern) = @_;
+  if (!defined $pattern) {
     &log("invalid param");
-    return;
+    return '';
   }
 
-  my $sql_string = "%$string%";
-  $sql_string =~ s/\*/%/g;
+  # _ and % are special characters for ILIKE, so escape them.
+  $pattern =~ s/(_|%)/\\$1/g;
+  # we want *$pattern*
+  $pattern = "%$pattern%";
+  # we use '*' wildcarding.
+  $pattern =~ s/\*/%/g;
 
-  # check whether the global cache has a result for this search
-  if (!$search_quotes || !defined($search_quotes->{$string})
-    || !$search_quotes->{$string})
-  {
-    &log("Fetching new quotes for search: $string");
-    my $sql = qq/
-SELECT * FROM quote WHERE LOWER(quote) LIKE LOWER(?)
-/;
-    my @params = ($sql_string);
-    my $href = &db_select($sql, \@params);
-    if (!$href || !%$href) {
-      &msg($server, $target, "No quotes found matching *$string*.");
-      return;
-    }
-
-    # place the result in the global cache
-    $search_quotes->{$string} = $href;
-  }
-
-  # pull a result out of the global cache
-  my $id = (keys %{$search_quotes->{$string}})[0];
-  my $quote_href = $search_quotes->{$string}->{$id};
-  delete $search_quotes->{$string}->{$id};
-
-  # remove the cache key for this search if there are none remaining
-  my $count_left = scalar (keys %{$search_quotes->{$string}});
-  delete $search_quotes->{$string} if $count_left == 0;
-
-  &spew_quote($server, $target, $quote_href, $count_left, $string);
+  return $pattern;
 }
 
 # @param server $server
 # @param string $target
-# @param string $str      search string
+# @param string $pattern Search string
 #
 # @return void
-sub quote_count {
-  my ($server, $target, $str) = @_;
-  if (!$server || !$target || !defined $str) {
+sub quote_search {
+  my ($server, $target, $pattern) = @_;
+  if (!$server || !$target || !defined $pattern) {
     &log("invalid param");
     return;
   }
 
-  # sql wildcard the string
-  my $sql_str = "%$str%";
-  $sql_str =~ s/\*/%/g;
+  my $sql_pattern = &sql_like_escape($pattern);
+
+  # check whether the global cache has a result for this search
+  if (!$search_quotes || !exists $search_quotes->{$pattern}) {
+    &log("Fetching new quotes for search: *$pattern*");
+    my $sql = qq/
+SELECT * FROM quote WHERE quote ILIKE ?
+/;
+    my @params = ($sql_pattern);
+    my $href = &db_select($sql, \@params);
+    if (!$href || !%$href) {
+      &msg($server, $target, "No quotes found matching *$pattern*.");
+      return;
+    }
+
+    # place the result in the global cache
+    $search_quotes->{$pattern} = $href;
+  }
+
+  # pull a result out of the global cache
+  my $id = (keys %{$search_quotes->{$pattern}})[0];
+  my $quote_href = $search_quotes->{$pattern}->{$id};
+  delete $search_quotes->{$pattern}->{$id};
+
+  # remove the cache key for this search if there are none remaining
+  my $count_left = scalar (keys %{$search_quotes->{$pattern}});
+  delete $search_quotes->{$pattern} if $count_left == 0;
+
+  &spew_quote($server, $target, $quote_href, $count_left, $pattern);
+}
+
+# @param server $server
+# @param string $target
+# @param string $pattern Search string
+#
+# @return void
+sub quote_count {
+  my ($server, $target, $pattern) = @_;
+  if (!$server || !$target || !defined $pattern) {
+    &log("invalid param");
+    return;
+  }
+
+  my $sql_pattern = &sql_like_escape($pattern);
 
   # get the count of quotes matching the pattern
   my $sql = qq/
 SELECT COUNT(1) FROM quote WHERE LOWER(quote) LIKE LOWER(?)
 /;
-  my @params = ($sql_str);
+  my @params = ($sql_pattern);
   my $href = &db_select($sql, \@params, 'count');
   if (!$href || !%$href) {
     &msg($server, $target, "Failed to find count.");
@@ -502,7 +518,7 @@ SELECT COUNT(1) FROM quote WHERE LOWER(quote) LIKE LOWER(?)
   $percent = sprintf "%.2f", $percent;
 
   &msg($server, $target,
-    "There are $count/$total_count ($percent%) quotes matching *$str*.");
+    "There are $count/$total_count ($percent%) quotes matching *$pattern*.");
 }
 
 # @param server $server
@@ -581,6 +597,10 @@ sub handle_command {
   # trim whitespace
   $msg =~ s/^\s+//;
   $msg =~ s/\s+$//;
+
+  # NOTE: we handle case insensitivity in a function above this as
+  #       we cannot trigger on 'Quote' for self messages (else output
+  #       of the quote triggers on itself).
 
   # quotestats
   return &quote_stats($server, $target)if $msg =~ /^!?quotestats$/;
