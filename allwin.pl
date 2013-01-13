@@ -1,3 +1,4 @@
+# vim: tabstop=4:shiftwidth=4:noexpandtab
 #
 # Created 17/08/2010
 # by horgh
@@ -41,8 +42,8 @@ my $channel_length = 10;
 
 Irssi::theme_register([
 	# $0 = nick, $1 = chan, $2 = msg, $3 = timestamp
-# This shows in format <nick:#chan> or the like
-#	'allmsg', '$3{pubmsgnick $0 {msgchannel $1}}$2'
+	# This shows in format <nick:#chan> or the like
+	#'allmsg', '$3{pubmsgnick $0 {msgchannel $1}}$2'
 	'allmsg', '$3 $1 {pubmsgnick $0}$2',
 	'allmsg_action', '$3 $1 {pubaction $0}$2'
 ]);
@@ -74,7 +75,8 @@ sub format_channel {
 		$session_colours{$channel} = $colour;
 	}
 	$colour = "0".$colour if ($colour < 10);
-	$channel = sprintf("%-" . $channel_length . "." . $channel_length . "s", $channel);
+	$channel = sprintf("%-" . $channel_length . "." . $channel_length
+		. "s", $channel);
 	return chr(3) . $colour . $channel;
 }
 
@@ -92,12 +94,14 @@ sub window_output {
 	}
 
 	# Setup timestamp
-	$timestamp = strftime(Irssi::settings_get_str('timestamp_format')." ", localtime);
+	$timestamp = strftime(Irssi::settings_get_str('timestamp_format') . " ",
+		localtime);
 
 	$target = format_channel($target);
 
 	$window = Irssi::window_find_name('allwin');
-	$window->printformat(MSGLEVEL_NEVER, $format, $nick, $target, $msg, $timestamp);
+	$window->printformat(MSGLEVEL_NEVER, $format, $nick, $target, $msg,
+		$timestamp);
 }
 
 sub sig_msg_pub {
