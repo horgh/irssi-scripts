@@ -23,6 +23,9 @@
 #   (Will find first channel named this)
 #
 
+use strict;
+use warnings;
+
 use Irssi;
 use vars qw($VERSION %IRSSI); 
 use POSIX;
@@ -48,7 +51,7 @@ Irssi::theme_register([
 	'allmsg_action', '$3 $1 {pubaction $0}$2'
 ]);
 
-my %session_colours = {};
+my $session_colours = {};
 my @colours = qw/2 3 4 5 6 7 8 9 10 11 12 13/;
 
 # total copy from nickcolor.pl
@@ -69,14 +72,14 @@ sub simple_hash {
 sub format_channel {
 	my ($channel) = @_;
 	# If already has a colour associated, use that
-	$colour = $session_colours{$channel};
+	my $colour = $session_colours->{$channel};
 	if (!$colour) {
-		$colour = simple_hash($channel);
-		$session_colours{$channel} = $colour;
+		$colour = &simple_hash($channel);
+		$session_colours->{$channel} = $colour;
 	}
-	$colour = "0".$colour if ($colour < 10);
-	$channel = sprintf("%-" . $channel_length . "." . $channel_length
-		. "s", $channel);
+	$colour = "0" . $colour if $colour < 10;
+	$channel = sprintf("%-" . $channel_length . "."
+		. $channel_length . "s", $channel);
 	return chr(3) . $colour . $channel;
 }
 
@@ -94,23 +97,78 @@ sub window_output {
 	}
 
 	# Setup timestamp
-	$timestamp = strftime(Irssi::settings_get_str('timestamp_format') . " ",
-		localtime);
+	my $timestamp = strftime(Irssi::settings_get_str('timestamp_format')
+		. " ", localtime);
 
 	$target = format_channel($target);
 
-	$window = Irssi::window_find_name('allwin');
+	my $window = Irssi::window_find_name('allwin');
 	$window->printformat(MSGLEVEL_NEVER, $format, $nick, $target, $msg,
 		$timestamp);
 }
 
+# @return void
+#
+# a public message in a channel. pass it through to allwin output.
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
+
+	# NOTE: those ignored seem to already not reach this point.
+
 	window_output('allmsg', $nick, $target, $msg);
 }
 
+# @param Server $server
+# @param string $target (channel)
+# @param string $nick
+# @param string $address
+# @param string $msg
+# @param int $level
+#
+# @return bool whether there is an ignore
+#
+# check whether there is an ignore given the above.
+# there is a built in $server->ignore_check() but I have found that it does
+# not say that someone is ignored if we ignore them like /ignore <nick>
+# for whatever reason.
+#
+# XXX: seems unnecessary - I was calling with the wrong level (ACTIONS vs.
+#      needed MSGLEVEL_ACTIONS).
+sub is_ignored {
+	my ($server, $target, $nick, $address, $msg, $level) = @_;
+	if (!$server || !defined $target || !defined $nick || !defined $address
+	    || !defined $msg || !defined $level)
+	{
+		Irssi::print("is_ignored: invalid parameter");
+		return 0;
+	}
+
+	# check using ignore_check() first.
+	if ($server->ignore_check($nick, $address, $target, $msg, $level)) {
+		Irssi::print("found $nick is ignored due to level");
+		return 1;
+	}
+
+	# check case where we have an ignore with mask eq nick
+	my @ignores = Irssi::ignores();
+	foreach my $ignore (@ignores) {
+		return 1 if $ignore->{mask} eq $nick;
+	}
+	return 0;
+}
+
+# @return void
+#
+# an action in a channel. pass through to allwin output.
 sub sig_irc_action {
 	my ($server, $msg, $nick, $address, $target) = @_;
+
+	# check if they are ignored and stop if so.
+	if ($server->ignore_check($nick, $address, $target, $msg,
+		Irssi::MSGLEVEL_ACTIONS))
+	{
+		return;
+	}
 	window_output('allmsg_action', $nick, $target, $msg);
 }
 
@@ -124,10 +182,12 @@ sub sig_irc_own_action {
 	sig_irc_action($server, $msg, $server->{nick}, "", $target);
 }
 
+# when entering text into allwin, we send it to a configured channel
+# so that we can chat in the configured channel from allwin.
 sub sig_window_text {
 	my ($cmd, $server, $witem) = @_;
-	$win = Irssi::active_win();
-	$name = $win->{name};
+	my $win = Irssi::active_win();
+	my $name = $win->{name};
 	# Window not named allwin
 	return if $name ne "allwin";
 
@@ -135,13 +195,13 @@ sub sig_window_text {
 	# Msg channel not set
 	return if !$msg_channel;
 	
-	$chan = Irssi::channel_find($msg_channel);
+	my $chan = Irssi::channel_find($msg_channel);
 	# Channel not found
 	return if !$chan;
 	$chan->{server}->command("msg $chan->{name} $cmd");
 }
 
-$window = Irssi::window_find_name('allwin');
+my $window = Irssi::window_find_name('allwin');
 Irssi::print("Create a window named 'allwin'") if (!$window);
 
 Irssi::settings_add_str('allwin', 'allwin_ignore_channels', '');
