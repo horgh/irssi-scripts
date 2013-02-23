@@ -450,7 +450,9 @@ sub quote_search {
   if (!$search_quotes || !exists $search_quotes->{$pattern}) {
     &log("Fetching new quotes for search: *$pattern*");
     my $sql = qq/
-SELECT * FROM quote WHERE quote ILIKE ?
+SELECT * FROM quote
+WHERE quote ILIKE ?
+ORDER BY id ASC
 /;
     my @params = ($sql_pattern);
     my $href = &db_select($sql, \@params);
