@@ -40,6 +40,11 @@ $VERSION = "20120101";
 	changed     => $VERSION
 );
 
+# suppress the Irssi::Nick warnings...
+# see http://bugs.irssi.org/index.php?do=details&task_id=242
+# and http://pound-perl.pm.org/code/irssi/autovoice.pl
+{ package Irssi::Nick }
+
 # @return aref    Array ref of channel names
 #
 # Retrieve channels we want to check
@@ -126,7 +131,40 @@ sub sig_redir_joinserver_whois {
   # warn if it's not in our good servers
   if (!grep(/^$whois_server$/, @$servers_aref)) {
     Irssi::print("joinserver: WARNING $whois_nick is on $whois_server.");
+    # if joinserver_ban is set, look at channels on this server
+    # we are in & opped & are joinserver_channels, and ban the person
+    &ban_nick($server, $whois_nick) if Irssi::settings_get_bool('joinserver_ban');
+  }
+}
+
+# @param server $server
+# @param string $nick
+#
+# @return void
+#
+# nick has been found to be on a bad server on the given irssi server
+# look at all joinserver channels on this server and try to ban them
+sub ban_nick {
+  my ($server, $nick) = @_;
+  if (!$server || !$nick) {
+    Irssi::print("joinserver: ban_nick: invalid param");
     return;
+  }
+
+  Irssi::print("joinserver: ban_nick: trying to ban $nick from joinserver channels!");
+
+  my $channels_aref = &get_channels;
+  foreach my $channel (@$channels_aref) {
+    my $irssi_channel = $server->channel_find($channel);
+    next if !$irssi_channel;
+    Irssi::print("joinserver: ban_nick: found $channel on server to ban...");
+    if (!$irssi_channel->{chanop}) {
+      Irssi::print("joinserver: ban_nick: you're not an op on $channel!");
+      next;
+    }
+    Irssi::print("joinserver: ban_nick: banning $nick on $channel");
+    $server->command("ban $channel $nick");
+    $server->command("kick $channel $nick sorry, choose a different server!");
   }
 }
 
@@ -154,3 +192,4 @@ Irssi::signal_add('redir joinserver whois', 'sig_redir_joinserver_whois');
 
 Irssi::settings_add_str('joinserver', 'joinserver_servers', '');
 Irssi::settings_add_str('joinserver', 'joinserver_channels', '');
+Irssi::settings_add_bool('joinserver', 'joinserver_ban', 0);
