@@ -22,6 +22,12 @@
 #    channel name, our nick, and the network
 #  - all bots other than self try to op me there if they are opped there
 #
+# Key management:
+#  - when you load the script it will generate a public/private keypair
+#  - copy the public key into a file containing pubkeys for all of the
+#    other 'bots' and distribute it to them
+#  - reload their scripts to load keys from the pubkeys file
+#
 # Requirements:
 # - Crypt::OpenSSL::RSA - libcrypt-openssl-rsa-perl
 #
