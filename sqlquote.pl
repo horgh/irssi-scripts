@@ -1,5 +1,5 @@
 #
-# 17/12/2011
+# 2011-12-17
 # will@summercat.com
 #
 # Interact with a database of quotes using DBI
@@ -7,7 +7,7 @@
 # PostgreSQL schema:
 # CREATE TABLE quote (
 #  id SERIAL,
-#  create_time TIMESTAMP DEFAULT current_timestamp,
+#  create_time TIMESTAMP WITH TIME ZONE DEFAULT current_timestamp,
 #  quote VARCHAR NOT NULL,
 #  added_by VARCHAR NOT NULL,
 #  UNIQUE (quote),
