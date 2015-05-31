@@ -416,6 +416,33 @@ SELECT * FROM quote ORDER BY random() LIMIT 20
   &spew_quote($server, $target, $quote_href);
 }
 
+sub _look_up_quote {
+	my ($id) = @_;
+	if (!defined $id) {
+		&log('Invalid parameter');
+		return undef;
+	}
+
+	my $sql = 'SELECT id, quote, create_time, added_by FROM quote WHERE id = ?';
+	my @params = ($id);
+	my $rows = &db_select_array($sql, \@params);
+	if (!$rows) {
+		&log('Unable to retrieve rows');
+		return undef;
+	}
+	if (@{ $rows } != 1) {
+		&log('Quote not found.');
+		return undef;
+	}
+
+	{
+		id          => $rows->[0][0],
+		quote       => $rows->[0][1],
+		create_time => $rows->[0][2],
+		added_by    => $rows->[0][3],
+	}
+}
+
 # @param server $server
 # @param string $target
 # @param int $id         Quote id to fetch
@@ -716,6 +743,73 @@ sub quote_added_by_top_days {
 	}
 }
 
+sub quote_set_added_by {
+  my ($server, $target, $id, $nick) = @_;
+  if (!$server || !$target || !defined $id || !defined $nick ||
+		length $nick == 0) {
+    &log("invalid parameter");
+    return;
+  }
+
+	# find the quote's current information so we know it exists and that
+	# it is missing the added by.
+	my $quote = &_look_up_quote($id);
+	if (!$id) {
+		&msg($server, $target, 'Quote not found.');
+		return;
+	}
+
+	if (defined $quote->{ added_by }) {
+		&msg($server, $target, 'That quote already has an added by.');
+		return;
+	}
+
+	my $sql = 'UPDATE quote SET added_by = ? WHERE id = ?';
+	my @params = ($nick, $id);
+	my $row_count = &db_manipulate($sql, \@params);
+	if (!defined $row_count) {
+		&log('Problem performing update');
+		return;
+	}
+	&msg($server, $target, "Quote updated.");
+}
+
+sub quote_set_time {
+  my ($server, $target, $id, $time) = @_;
+  if (!$server || !$target || !defined $id || !defined $time ||
+		length $time == 0) {
+    &log("invalid parameter");
+    return;
+  }
+
+	# find the quote's current information so we know it exists and that
+	# it is missing the added by.
+	my $quote = &_look_up_quote($id);
+	if (!$id) {
+		&msg($server, $target, 'Quote not found.');
+		return;
+	}
+
+	if (defined $quote->{ create_time }) {
+		&msg($server, $target, 'That quote already has a time.');
+		return;
+	}
+
+	if ($time !~ /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/) {
+		&msg($server, $target, "Please use 24h time format YYYY-MM-DD HH:MM:SS");
+		return;
+	}
+
+	my $sql = 'UPDATE quote SET create_time = ? WHERE id = ?';
+	my @params = ($time, $id);
+	my $row_count = &db_manipulate($sql, \@params);
+	if (!defined $row_count) {
+		&log('Problem performing update');
+		return;
+	}
+	&msg($server, $target, "Quote updated.");
+}
+
 # @param server $server
 # @param string $target
 # @param string $msg   Message on a channel enabled for triggers
@@ -729,8 +823,7 @@ sub handle_command {
   }
 
   # trim whitespace
-  $msg =~ s/^\s+//;
-  $msg =~ s/\s+$//;
+  $msg =~ s/^\s+|\s+$//g;
 
   # NOTE: we handle case insensitivity in a function above this as
   #       we cannot trigger on 'Quote' for self messages (else output
@@ -772,6 +865,18 @@ sub handle_command {
 
 	# quoteaddedbytop <days>
 	return &quote_added_by_top_days($server, $target, $1) if $msg =~ /^!?quoteaddedbytop\s+(\d+)$/;
+
+	# quotesetaddedby <id> <nick>
+	return &quote_set_added_by($server, $target, $1, $2) if $msg =~ /^!?quotesetaddedby\s+(\d+)\s+(\S+)$/;
+	if ($msg =~ /^!?quotesetaddedby/) {
+		&msg($server, $target, "Usage: quotesetaddedby <quote number> <nick>");
+	}
+
+	# quotesettime <id> <time>
+	return &quote_set_time($server, $target, $1, $2) if $msg =~ /^!?quotesettime\s+(\d+)\s+(\S+\s+\S+)$/;
+	if ($msg =~ /^!?quotesettime/) {
+		&msg($server, $target, "Usage: quotesettime <quote number> <YYYY-MM-DD HH:MM:SS>");
+	}
 }
 
 # @param string $settings_str  Name of the setting
