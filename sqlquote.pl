@@ -9,7 +9,7 @@
 #  id SERIAL,
 #  create_time TIMESTAMP WITH TIME ZONE DEFAULT current_timestamp,
 #  quote VARCHAR NOT NULL,
-#  added_by VARCHAR NOT NULL,
+#  added_by VARCHAR,
 #  UNIQUE (quote),
 #  PRIMARY KEY (id)
 # );
@@ -157,6 +157,31 @@ sub db_select {
   return $href;
 }
 
+sub db_select_array {
+	my ($sql, $params) = @_;
+	if (!defined $sql || length $sql == 0 || !$params) {
+		&log('Invalid parameter');
+		return undef;
+	}
+
+	my $sth = &db_query($sql, $params);
+	if (!$sth) {
+		&log('Failed to execute query');
+		return undef;
+	}
+
+	my $rows = $sth->fetchall_arrayref;
+	if (!$rows) {
+		&log('Fetchall failed');
+		return undef;
+	}
+	if ($sth->err) {
+		&log('Fetchall failed (2)');
+		return undef;
+	}
+	return $rows;
+}
+
 # @param string $sql
 # @param aref $paramsAref
 #
@@ -263,13 +288,22 @@ sub spew_quote {
   &msg($server, $target, $header);
 
   # date line
-  my $dt_parser = DateTime::Format::Pg->parse_timestamp($quote_href->{create_time});
-  my $date = DateTime::Format::Pg->format_date($dt_parser);
+	my $date;
+	if (defined $quote_href->{ create_time}) {
+		my $dt_parser = DateTime::Format::Pg->parse_timestamp(
+			$quote_href->{create_time});
+		$date = DateTime::Format::Pg->format_date($dt_parser);
+	} else {
+		$date = 'missing';
+	}
   my $date_header = "Date: $date";
   &msg($server, $target, $date_header);
 
   # added by line
-  my $added_by = "Added by: " . $quote_href->{added_by};
+  my $added_by = "Added by:";
+	if (defined $quote_href->{ added_by }) {
+		$added_by .= ' ' . $quote_href->{ added_by };
+	}
   &msg($server, $target, $added_by);
 
   foreach my $line (split /\n|\r/, $quote_href->{quote}) {
@@ -585,6 +619,104 @@ sub quote_free {
 }
 
 # @param server $server
+# @param string $target   channel
+#
+# @return void
+#
+# get a count of quotes missing date and added by.
+sub quote_missing {
+  my ($server, $target) = @_;
+  if (!$server || !$target) {
+    &log("invalid parameter");
+    return;
+  }
+	my $sql = '
+		SELECT COUNT(1)
+		FROM quote
+		WHERE create_time IS NULL OR
+		added_by IS NULL
+	';
+	my @params;
+	my $rows = &db_select_array($sql, \@params);
+	if (!$rows) {
+		&log('Unable to retrieve rows');
+		return;
+	}
+	if (@{ $rows } != 1) {
+		&log('Unexpected row count');
+		return;
+	}
+	my $count_missing = $rows->[0][0];
+
+	my $count_total = &get_quote_count;
+	my $percent_missing = sprintf '%.2f', ($count_missing/$count_total*100);
+
+	my $msg = "$count_missing/$count_total ($percent_missing%) quotes are missing added by and/or added time.";
+
+	&msg($server, $target, $msg);
+}
+
+sub quote_added_by_top {
+  my ($server, $target) = @_;
+  if (!$server || !$target) {
+    &log("invalid parameter");
+    return;
+  }
+	my $sql = '
+		SELECT added_by, COUNT(quote) AS count
+		FROM quote
+		WHERE added_by IS NOT NULL
+		GROUP BY(added_by)
+		ORDER BY count DESC
+		LIMIT 5
+	';
+	my @params;
+	my $rows = &db_select_array($sql, \@params);
+	if (!$rows) {
+		&log('Unable to retrieve rows');
+		return;
+	}
+
+	&msg($server, $target, "Top quote adders (all time):");
+	foreach my $row (@{ $rows }) {
+		my ($name, $count) = @{ $row };
+		my $msg = " $name: $count";
+		&msg($server, $target, $msg);
+	}
+}
+
+sub quote_added_by_top_days {
+  my ($server, $target, $days) = @_;
+  if (!$server || !$target || !defined $days) {
+    &log("invalid parameter");
+    return;
+  }
+	my $sql = '
+		SELECT added_by, COUNT(quote) AS count
+		FROM quote
+		WHERE added_by IS NOT NULL AND
+		create_time IS NOT NULL AND
+		create_time > now() - ?::interval
+		GROUP BY(added_by)
+		ORDER BY count DESC
+		LIMIT 5
+	';
+	my @params = ("$days days");
+	my $rows = &db_select_array($sql, \@params);
+	if (!$rows) {
+		&log('Unable to retrieve rows');
+		return;
+	}
+
+	&msg($server, $target, "Top quote adders (past $days days):");
+	foreach my $row (@{ $rows }) {
+		my ($name, $count) = @{ $row };
+		my $msg = " $name: $count";
+		&msg($server, $target, $msg);
+	}
+}
+
+# @param server $server
 # @param string $target
 # @param string $msg   Message on a channel enabled for triggers
 #
@@ -631,6 +763,15 @@ sub handle_command {
 
   # quotefree
   return &quote_free($server, $target) if $msg =~ /^!?quotefree$/;
+
+	# quotemissing
+	return &quote_missing($server, $target) if $msg =~ /^!?quotemissing$/;
+
+	# quoteaddedbytop
+	return &quote_added_by_top($server, $target) if $msg =~ /^!?quoteaddedbytop$/;
+
+	# quoteaddedbytop <days>
+	return &quote_added_by_top_days($server, $target, $1) if $msg =~ /^!?quoteaddedbytop\s+(\d+)$/;
 }
 
 # @param string $settings_str  Name of the setting
