@@ -683,12 +683,45 @@ sub quote_missing {
 	&msg($server, $target, $msg);
 }
 
+sub quote_get_missing {
+	my ($server, $target) = @_;
+	if (!$server || !$target) {
+		&log("Invalid parameter");
+		return;
+	}
+	my $sql = '
+		SELECT id FROM quote
+		WHERE create_time IS NULL OR added_by IS NULL
+		ORDER BY random()
+		LIMIT 1
+	';
+	my @params;
+	my $rows = &db_select_array($sql, \@params);
+	if (!$rows) {
+		&log('Unable to retrieve rows');
+		return;
+	}
+	if (@{ $rows } != 1) {
+		&log('Unexpected row count');
+		return;
+	}
+	my $id = $rows->[0][0];
+
+	my $quote = &_look_up_quote($id);
+	if (!$quote) {
+		&log("Unable to look up quote");
+		return;
+	}
+
+	&spew_quote($server, $target, $quote);
+}
+
 sub quote_added_by_top {
-  my ($server, $target) = @_;
-  if (!$server || !$target) {
-    &log("invalid parameter");
-    return;
-  }
+	my ($server, $target) = @_;
+	if (!$server || !$target) {
+		&log("invalid parameter");
+		return;
+	}
 	my $sql = '
 		SELECT added_by, COUNT(quote) AS count
 		FROM quote
@@ -713,11 +746,11 @@ sub quote_added_by_top {
 }
 
 sub quote_added_by_top_days {
-  my ($server, $target, $days) = @_;
-  if (!$server || !$target || !defined $days) {
-    &log("invalid parameter");
-    return;
-  }
+	my ($server, $target, $days) = @_;
+	if (!$server || !$target || !defined $days) {
+		&log("invalid parameter");
+		return;
+	}
 	my $sql = '
 		SELECT added_by, COUNT(quote) AS count
 		FROM quote
@@ -744,12 +777,12 @@ sub quote_added_by_top_days {
 }
 
 sub quote_set_added_by {
-  my ($server, $target, $id, $nick) = @_;
-  if (!$server || !$target || !defined $id || !defined $nick ||
+	my ($server, $target, $id, $nick) = @_;
+	if (!$server || !$target || !defined $id || !defined $nick ||
 		length $nick == 0) {
-    &log("invalid parameter");
-    return;
-  }
+		&log("invalid parameter");
+		return;
+	}
 
 	# find the quote's current information so we know it exists and that
 	# it is missing the added by.
@@ -775,12 +808,12 @@ sub quote_set_added_by {
 }
 
 sub quote_set_time {
-  my ($server, $target, $id, $time) = @_;
-  if (!$server || !$target || !defined $id || !defined $time ||
+	my ($server, $target, $id, $time) = @_;
+	if (!$server || !$target || !defined $id || !defined $time ||
 		length $time == 0) {
-    &log("invalid parameter");
-    return;
-  }
+		&log("invalid parameter");
+		return;
+	}
 
 	# find the quote's current information so we know it exists and that
 	# it is missing the added by.
@@ -859,6 +892,9 @@ sub handle_command {
 
 	# quotemissing
 	return &quote_missing($server, $target) if $msg =~ /^!?quotemissing$/;
+
+	# quotegetmissing
+	return &quote_get_missing($server, $target) if $msg =~ /^!?quotegetmissing$/;
 
 	# quoteaddedbytop
 	return &quote_added_by_top($server, $target) if $msg =~ /^!?quoteaddedbytop$/;
