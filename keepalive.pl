@@ -3,13 +3,23 @@
 # the rationale I have for it is my raspberry pi seems to drop connection
 # consistently. if I do this then the connection stays up, yay.
 #
+# the idea is we need to exercise the connection between the raspberry
+# pi server and the server it is linked to. connections to clients seem
+# to remain already.
+#
 
 use warnings;
 use strict;
 
 use Irssi;
 
+# delay in seconds between keepalive messages
 my $DELAY = 10;
+# channel to send keepalive messages to.
+# note you must ensure a client from another server you want to keep
+# the connection alive to is in this channel so that the connection
+# gets used.
+my $CHANNEL = '#keepalive';
 
 use vars qw($VERSION %IRSSI);
 $VERSION = '20140609';
@@ -33,7 +43,7 @@ $VERSION = '20140609';
 sub keepalive_message_self {
 	foreach my $server (Irssi::servers()) {
 		my $nick = $server->{nick};
-		$server->command("MSG $nick hi");
+		$server->command("MSG $CHANNEL h");
 	}
 }
 
