@@ -5,6 +5,8 @@
 # Interact with a database of quotes using DBI
 #
 # PostgreSQL schema:
+#
+# -- Store the quote itself.
 # CREATE TABLE quote (
 #  id SERIAL,
 #  create_time TIMESTAMP WITH TIME ZONE DEFAULT current_timestamp,
@@ -12,6 +14,15 @@
 #  added_by VARCHAR,
 #  UNIQUE (quote),
 #  PRIMARY KEY (id)
+# );
+#
+# -- Record when someone's search turns up a quote.
+# CREATE TABLE quote_search (
+# 	id SERIAL,
+# 	create_time TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT current_timestamp,
+# 	quote_id INTEGER NOT NULL REFERENCES quote(id)
+# 		ON UPDATE CASCADE ON DELETE CASCADE,
+# 	PRIMARY KEY (id)
 # );
 #
 
@@ -34,7 +45,7 @@ my $dsn = "dbi:Pg:dbname=$DB_NAME;host=$DB_HOST";
 # Done config
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "20111217";
+$VERSION = "20160605";
 %IRSSI = (
 	authors     => "Will Storey",
 	contact     => "will\@summercat.com",
@@ -535,7 +546,38 @@ ORDER BY id ASC
   my $count_left = scalar (keys %{$search_quotes->{$pattern}});
   delete $search_quotes->{$pattern} if $count_left == 0;
 
+  # Record that we showed this quote from a search.
+  # This is to track popular quotes.
+  # I don't check success here because either way I want to proceed.
+  &_record_quote_was_searched($quote_href->{ id });
+
   &spew_quote($server, $target, $quote_href, $count_left, $pattern);
+}
+
+# Record into the database that someone searched for and found this quote.
+# The purpose is to be able to look at this afterwards for popular quotes.
+#
+# Parameters:
+# quote_id: Integer referring to a quote id in the database
+#
+# Returns: Boolean, whether we recorded successfully.
+sub _record_quote_was_searched {
+	my ($quote_id) = @_;
+	if (!defined $quote_id) {
+		&log("_record_quote_was_searched: Missing quote identifier");
+		return 0;
+	}
+
+	my $sql = 'INSERT INTO quote_search(quote_id) VALUES(?)';
+	my @params = ($quote_id);
+
+	my $row_count = &db_manipulate($sql, \@params);
+	if (!defined $row_count || $row_count != 1) {
+		&log("_record_quote_was_searched: Unable to insert");
+		return 0;
+	}
+
+	return 1;
 }
 
 # @param server $server
@@ -610,7 +652,7 @@ sub quote_memory {
   if ($search_quotes) {
     foreach my $str (keys %$search_quotes) {
       my $search_href = $search_quotes->{$str};
-      $search_quote_count += scalar (keys $search_href);
+      $search_quote_count += scalar (keys %{ $search_href });
     }
   }
 
