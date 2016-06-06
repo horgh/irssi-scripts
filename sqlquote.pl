@@ -885,6 +885,65 @@ sub quote_set_time {
 	&msg($server, $target, "Quote updated.");
 }
 
+sub quote_rank {
+	my ($server, $target, $rank) = @_;
+	if (!$server || !$target || !defined $rank) {
+		&log("quote_rank: Invalid parameter");
+		return;
+	}
+
+	# Find the n'th most popular quote and display it.
+	# Rank 1 means the #1 most popular.
+
+	my $sql = q/
+		SELECT
+
+		COUNT(1) AS count,
+		q.id AS id,
+		q.quote AS quote,
+		q.create_time AS create_time,
+		q.added_by AS added_by
+
+		FROM quote_search qs
+		LEFT JOIN quote q
+		ON q.id = qs.quote_id
+
+		GROUP BY q.id
+
+		ORDER BY count, q.id ASC
+		LIMIT 1 OFFSET ?
+	/;
+
+	my @params = ($rank-1);
+
+	my $rows = &db_select_array($sql, \@params);
+	if (!$rows) {
+		&log("quote_rank: Select failure");
+		return;
+	}
+
+	if (@{ $rows } == 0) {
+		&msg($server, $target, "Quote not found.");
+		return;
+	}
+
+	my $quote = {
+		id          => $rows->[0][1],
+		quote       => $rows->[0][2],
+		create_time => $rows->[0][3],
+		added_by    => $rows->[0][4],
+	};
+
+	my $votes = $rows->[0][0];
+
+	my $msg = "#$rank most popular quote (" . $votes;
+	$msg .= " search" if $votes == 1;
+	$msg .= " searches" if $votes != 1;
+	$msg .= "):";
+	&msg($server, $target, $msg);
+	&spew_quote($server, $target, $quote, undef, undef);
+}
+
 # @param server $server
 # @param string $target
 # @param string $msg   Message on a channel enabled for triggers
@@ -954,6 +1013,17 @@ sub handle_command {
 	return &quote_set_time($server, $target, $1, $2) if $msg =~ /^!?quotesettime\s+(\d+)\s+(\S+\s+\S+)$/;
 	if ($msg =~ /^!?quotesettime/) {
 		&msg($server, $target, "Usage: quotesettime <quote number> <YYYY-MM-DD HH:MM:SS>");
+	}
+
+	# quoterank
+	if ($msg =~ /^!?quoterank$/i) {
+		my $rank = 1;
+		return &quote_rank($server, $target, $rank);
+	}
+
+	if ($msg =~ /^!?quoterank\s+(\d+)$/i) {
+		my $rank = ($1);
+		return &quote_rank($server, $target, $rank);
 	}
 }
 
