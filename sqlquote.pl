@@ -898,7 +898,7 @@ sub quote_rank {
 	my $sql = q/
 		SELECT
 
-		COUNT(1) AS count,
+		COUNT(*) AS count,
 		q.id AS id,
 		q.quote AS quote,
 		q.create_time AS create_time,
@@ -910,7 +910,7 @@ sub quote_rank {
 
 		GROUP BY q.id
 
-		ORDER BY count, q.id ASC
+		ORDER BY count DESC, q.id ASC
 		LIMIT 1 OFFSET ?
 	/;
 
