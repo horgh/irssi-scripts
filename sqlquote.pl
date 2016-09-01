@@ -72,32 +72,32 @@ my $search_quotes;
 #
 # @return void
 sub log {
-  my ($msg) = @_;
-  if (!defined $msg || !length $msg) {
-    $msg = "no log message given!";
-  }
-  chomp $msg;
+	my ($msg) = @_;
+	if (!defined $msg || !length $msg) {
+		$msg = "no log message given!";
+	}
+	chomp $msg;
 
-  my $caller = (caller(1))[3];
-  # Irssi finds function name that looks like:
-  # "Irssi::Script::sqlquote::quote_search"
-  # trim off "Irssi::Script::".
-  $caller =~ s/^Irssi::Script:://;
-  my $output = "$caller: $msg";
+	my $caller = (caller(1))[3];
+	# Irssi finds function name that looks like:
+	# "Irssi::Script::sqlquote::quote_search"
+	# trim off "Irssi::Script::".
+	$caller =~ s/^Irssi::Script:://;
+	my $output = "$caller: $msg";
 
-  Irssi::print($output);
+	Irssi::print($output);
 }
 
 # @return mixed DBI handle or undef
 sub get_dbh {
-  if (!$dbh || !$dbh->ping) {
-    $dbh = DBI->connect($dsn, $DB_USER, $DB_PASS);
-    if (!$dbh || !$dbh->ping) {
-      &log("failed to connect to database: " . $DBI::errstr);
-      return undef;
-    }
-  }
-  return $dbh;
+	if (!$dbh || !$dbh->ping) {
+		$dbh = DBI->connect($dsn, $DB_USER, $DB_PASS);
+		if (!$dbh || !$dbh->ping) {
+			&log("failed to connect to database: " . $DBI::errstr);
+			return undef;
+		}
+	}
+	return $dbh;
 }
 
 # @param string $sql         SQL to execute
@@ -108,29 +108,29 @@ sub get_dbh {
 # Executes a query and returns the sth
 # Lowest level DB interaction
 sub db_query {
-  my ($sql, $paramsAref) = @_;
-  if (!$sql || !$paramsAref) {
-    &log("invalid param");
-    return undef;
-  }
+	my ($sql, $paramsAref) = @_;
+	if (!$sql || !$paramsAref) {
+		&log("invalid param");
+		return undef;
+	}
 
-  my $dbh = &get_dbh;
-  if (!$dbh || !$dbh->ping) {
-    &log("failure getting dbh");
-    return undef;
-  }
+	my $dbh = &get_dbh;
+	if (!$dbh || !$dbh->ping) {
+		&log("failure getting dbh");
+		return undef;
+	}
 
-  my $sth = $dbh->prepare($sql);
-  if (!$sth) {
-    &log("failure preparing sql: $sql : " . $dbh->errstr);
-    return undef;
-  }
+	my $sth = $dbh->prepare($sql);
+	if (!$sth) {
+		&log("failure preparing sql: $sql : " . $dbh->errstr);
+		return undef;
+	}
 
-  if (!$sth->execute(@$paramsAref)) {
-    &log("failure executing sql: $sql : " . $sth->errstr);
-    return undef;
-  }
-  return $sth;
+	if (!$sth->execute(@$paramsAref)) {
+		&log("failure executing sql: $sql : " . $sth->errstr);
+		return undef;
+	}
+	return $sth;
 }
 
 # @param string $sql             SQL to execute
@@ -143,34 +143,34 @@ sub db_query {
 #
 # Execute and return rows from a SELECT query
 sub db_select {
-  my ($sql, $paramsAref, $keyField) = @_;
-  # keyField is optional
-  if (!$sql || !$paramsAref) {
-    &log("invalid param");
-    return undef;
-  }
+	my ($sql, $paramsAref, $keyField) = @_;
+	# keyField is optional
+	if (!$sql || !$paramsAref) {
+		&log("invalid param");
+		return undef;
+	}
 
-  my $sth = &db_query($sql, $paramsAref);
-  if (!$sth) {
-    &log("failure executing query");
-    return undef;
-  }
+	my $sth = &db_query($sql, $paramsAref);
+	if (!$sth) {
+		&log("failure executing query");
+		return undef;
+	}
 
-  # id = key field
-  my $key = 'id';
-  if ($keyField) {
-    $key = $keyField;
-  }
-  my $href = $sth->fetchall_hashref($key);
+	# id = key field
+	my $key = 'id';
+	if ($keyField) {
+		$key = $keyField;
+	}
+	my $href = $sth->fetchall_hashref($key);
 
-  # Check if successfully fetched href
-  # Fetchall_hashref will have set dbh->err if so
-  my $dbh = &get_dbh;
-  if (!$dbh || $dbh->err) {
-    &log("Failure fetching results of SQL: $sql " . $dbh->errstr);
-    return undef;
-  }
-  return $href;
+	# Check if successfully fetched href
+	# Fetchall_hashref will have set dbh->err if so
+	my $dbh = &get_dbh;
+	if (!$dbh || $dbh->err) {
+		&log("Failure fetching results of SQL: $sql " . $dbh->errstr);
+		return undef;
+	}
+	return $href;
 }
 
 sub db_select_array {
@@ -205,18 +205,18 @@ sub db_select_array {
 #
 # Perform a data changing query, such as UPDATE, DELETE, INSERT
 sub db_manipulate {
-  my ($sql, $paramsAref) = @_;
-  if (!$sql || !$paramsAref) {
-    &log("invalid param");
-    return undef;
-  }
+	my ($sql, $paramsAref) = @_;
+	if (!$sql || !$paramsAref) {
+		&log("invalid param");
+		return undef;
+	}
 
-  my $sth = &db_query($sql, $paramsAref);
-  if (!$sth) {
-    &log("failure executing query");
-    return undef;
-  }
-  return $sth->rows;
+	my $sth = &db_query($sql, $paramsAref);
+	if (!$sth) {
+		&log("failure executing query");
+		return undef;
+	}
+	return $sth->rows;
 }
 
 # @param server $server
@@ -227,38 +227,38 @@ sub db_manipulate {
 #
 # output an irc message to a target - channel/nick.
 sub msg {
-  my ($server, $target, $msg) = @_;
-  if (!$server || !$target || !$msg) {
-    &log("invalid param");
-    return;
-  }
+	my ($server, $target, $msg) = @_;
+	if (!$server || !$target || !$msg) {
+		&log("invalid param");
+		return;
+	}
 
-  $server->command("MSG $target $msg");
+	$server->command("MSG $target $msg");
 }
 
 # @return void
 #
 # clear the quote cache.
 sub clear_quote_cache {
-  # free the cached quotes by unsetting the global hashes which hold
-  # the cached results.
-  $random_quotes = undef;
-  $search_quotes = undef;
-  &log("Quote cache cleared.");
+	# free the cached quotes by unsetting the global hashes which hold
+	# the cached results.
+	$random_quotes = undef;
+	$search_quotes = undef;
+	&log("Quote cache cleared.");
 }
 
 # @return mixed int count of quotes or undef if failure
 #
 # count of quotes in the database
 sub get_quote_count {
-  my $sql = qq/
+	my $sql = qq/
 SELECT COUNT(1) AS id FROM quote
 /;
-  my @params = ();
-  my $href = &db_select($sql, \@params);
-  return undef unless $href && %$href && scalar(keys(%$href)) == 1;
-  my $count = (keys %$href)[0];
-  return $count;
+	my @params = ();
+	my $href = &db_select($sql, \@params);
+	return undef unless $href && %$href && scalar(keys(%$href)) == 1;
+	my $count = (keys %$href)[0];
+	return $count;
 }
 
 # @param server $server
@@ -268,19 +268,19 @@ SELECT COUNT(1) AS id FROM quote
 #
 # Get database stats
 sub quote_stats {
-  my ($server, $target) = @_;
-  if (!$server || !$target) {
-    &log("invalid param");
-    return;
-  }
+	my ($server, $target) = @_;
+	if (!$server || !$target) {
+		&log("invalid param");
+		return;
+	}
 
-  my $count = &get_quote_count;
-  if (!$count) {
-    &msg($server, $target, "Failed to get quote count.");
-    return;
-  }
+	my $count = &get_quote_count;
+	if (!$count) {
+		&msg($server, $target, "Failed to get quote count.");
+		return;
+	}
 
-  &msg($server, $target, "There are $count quotes in the database.");
+	&msg($server, $target, "There are $count quotes in the database.");
 }
 
 # @param server $server
@@ -291,19 +291,19 @@ sub quote_stats {
 #
 # @return void
 sub spew_quote {
-  my ($server, $target, $quote_href, $left, $search) = @_;
-  # left, search are optional
-  if (!$server || !$target || !$quote_href) {
-    &log("invalid param");
-    return;
-  }
+	my ($server, $target, $quote_href, $left, $search) = @_;
+	# left, search are optional
+	if (!$server || !$target || !$quote_href) {
+		&log("invalid param");
+		return;
+	}
 
-  my $header = "Quote #\002" . $quote_href->{id} . "\002";
-  $header .= " ($left left)" if defined $left;
-  $header .= ": *$search*" if defined $search;
-  &msg($server, $target, $header);
+	my $header = "Quote #\002" . $quote_href->{id} . "\002";
+	$header .= " ($left left)" if defined $left;
+	$header .= ": *$search*" if defined $search;
+	&msg($server, $target, $header);
 
-  # date line
+	# date line
 	my $date;
 	if (defined $quote_href->{ create_time}) {
 		my $datetime = DateTime::Format::Pg->parse_timestamptz(
@@ -313,21 +313,21 @@ sub spew_quote {
 	} else {
 		$date = 'missing';
 	}
-  my $date_header = "Date: $date";
-  &msg($server, $target, $date_header);
+	my $date_header = "Date: $date";
+	&msg($server, $target, $date_header);
 
-  # added by line
-  my $added_by = "Added by:";
+	# added by line
+	my $added_by = "Added by:";
 	if (defined $quote_href->{ added_by }) {
 		$added_by .= ' ' . $quote_href->{ added_by };
 	}
-  &msg($server, $target, $added_by);
+	&msg($server, $target, $added_by);
 
-  foreach my $line (split /\n|\r/, $quote_href->{quote}) {
-    chomp $line;
-    next if $line =~ /^\s*$/;
-    &msg($server, $target, " $line");
-  }
+	foreach my $line (split /\n|\r/, $quote_href->{quote}) {
+		chomp $line;
+		next if $line =~ /^\s*$/;
+		&msg($server, $target, " $line");
+	}
 }
 
 # @param server $server
@@ -337,24 +337,24 @@ sub spew_quote {
 #
 # Get latest quote
 sub quote_latest {
-  my ($server, $target) = @_;
-  if (!$server || !$target) {
-    &log("invalid param");
-    return;
-  }
+	my ($server, $target) = @_;
+	if (!$server || !$target) {
+		&log("invalid param");
+		return;
+	}
 
-  my $sql = qq/
+	my $sql = qq/
 SELECT * FROM quote ORDER BY id DESC LIMIT 1
 /;
-  my @params = ();
-  my $href = &db_select($sql, \@params);
-  return unless $href;
+	my @params = ();
+	my $href = &db_select($sql, \@params);
+	return unless $href;
 
-  my $id = (keys %$href)[0];
-  return unless $id;
+	my $id = (keys %$href)[0];
+	return unless $id;
 
-  my $quote_href = $href->{$id};
-  &spew_quote($server, $target, $quote_href);
+	my $quote_href = $href->{$id};
+	&spew_quote($server, $target, $quote_href);
 }
 
 # @param server $server
@@ -365,37 +365,37 @@ SELECT * FROM quote ORDER BY id DESC LIMIT 1
 #
 # find the latest quote with the given search string and spew it
 sub quote_latest_search {
-  my ($server, $target, $pattern) = @_;
-  if (!$server || !$target || !defined $pattern) {
-    &log("invalid param");
-    return;
-  }
+	my ($server, $target, $pattern) = @_;
+	if (!$server || !$target || !defined $pattern) {
+		&log("invalid param");
+		return;
+	}
 
-  # convert to sql wildcard
-  my $sql_pattern = &sql_like_escape($pattern);
+	# convert to sql wildcard
+	my $sql_pattern = &sql_like_escape($pattern);
 
-  my $sql = qq/
+	my $sql = qq/
 SELECT * FROM quote
 WHERE quote ILIKE ?
 ORDER BY id DESC
 LIMIT 1
 /;
-  my @params = ($sql_pattern);
-  my $href = &db_select($sql, \@params);
-  if (!$href || !%$href) {
-    &msg($server, $target, "No quotes found matching *$pattern*.");
-    return;
-  }
+	my @params = ($sql_pattern);
+	my $href = &db_select($sql, \@params);
+	if (!$href || !%$href) {
+		&msg($server, $target, "No quotes found matching *$pattern*.");
+		return;
+	}
 
-  # find the only key in the hash
-  my $id = (keys %$href)[0];
-  if (!defined $id) {
-    &log("no id found");
-    return;
-  }
+	# find the only key in the hash
+	my $id = (keys %$href)[0];
+	if (!defined $id) {
+		&log("no id found");
+		return;
+	}
 
-  my $quote_href = $href->{$id};
-  &spew_quote($server, $target, $quote_href);
+	my $quote_href = $href->{$id};
+	&spew_quote($server, $target, $quote_href);
 }
 
 # @param server $server
@@ -405,32 +405,32 @@ LIMIT 1
 #
 # Get a random quote
 sub quote_random {
-  my ($server, $target) = @_;
-  if (!$server || !$target) {
-    &log("invalid param");
-    return;
-  }
+	my ($server, $target) = @_;
+	if (!$server || !$target) {
+		&log("invalid param");
+		return;
+	}
 
-  # check if we need to fetch more quotes into the global cache
-  if (!$random_quotes || !%$random_quotes) {
-    &log("Fetching new random quotes.");
-    my $sql = qq/
+	# check if we need to fetch more quotes into the global cache
+	if (!$random_quotes || !%$random_quotes) {
+		&log("Fetching new random quotes.");
+		my $sql = qq/
 SELECT * FROM quote ORDER BY random() LIMIT 20
 /;
-    my @params = ();
-    my $href = &db_select($sql, \@params);
-    return unless $href;
+		my @params = ();
+		my $href = &db_select($sql, \@params);
+		return unless $href;
 
-    # set the global cache
-    $random_quotes = $href;
-  }
+		# set the global cache
+		$random_quotes = $href;
+	}
 
-  # pull a quote out of the global cache
-  my $id = (keys %$random_quotes)[0];
-  my $quote_href = $random_quotes->{$id};
-  delete $random_quotes->{$id};
+	# pull a quote out of the global cache
+	my $id = (keys %$random_quotes)[0];
+	my $quote_href = $random_quotes->{$id};
+	delete $random_quotes->{$id};
 
-  &spew_quote($server, $target, $quote_href);
+	&spew_quote($server, $target, $quote_href);
 }
 
 sub _look_up_quote {
@@ -466,24 +466,24 @@ sub _look_up_quote {
 #
 # @return void
 sub quote_id {
-  my ($server, $target, $id) = @_;
-  if (!$server || !$target || !defined $id) {
-    &log("invalid param");
-    return;
-  }
+	my ($server, $target, $id) = @_;
+	if (!$server || !$target || !defined $id) {
+		&log("invalid param");
+		return;
+	}
 
-  my $sql = qq/
+	my $sql = qq/
 SELECT * FROM quote WHERE id = ?
 /;
-  my @params = ($id);
-  my $href = &db_select($sql, \@params);
-  if (!$href || !%$href || !defined($href->{$id})) {
-    &msg($server, $target, "No quote with id $id found.");
-    return;
-  }
+	my @params = ($id);
+	my $href = &db_select($sql, \@params);
+	if (!$href || !%$href || !defined($href->{$id})) {
+		&msg($server, $target, "No quote with id $id found.");
+		return;
+	}
 
-  my $quote_href = $href->{$id};
-  &spew_quote($server, $target, $quote_href);
+	my $quote_href = $href->{$id};
+	&spew_quote($server, $target, $quote_href);
 }
 
 # @param string $pattern Search string pattern
@@ -494,20 +494,20 @@ SELECT * FROM quote WHERE id = ?
 # query. also wrap the query in % so we do wildcard matching correctly,
 # and translate '*' to '%'.
 sub sql_like_escape {
-  my ($pattern) = @_;
-  if (!defined $pattern) {
-    &log("invalid param");
-    return '';
-  }
+	my ($pattern) = @_;
+	if (!defined $pattern) {
+		&log("invalid param");
+		return '';
+	}
 
-  # _ and % are special characters for ILIKE, so escape them.
-  $pattern =~ s/(_|%|\\)/\\$1/g;
-  # we want *$pattern*
-  $pattern = "%$pattern%";
-  # we use '*' wildcarding.
-  $pattern =~ s/\*/%/g;
+	# _ and % are special characters for ILIKE, so escape them.
+	$pattern =~ s/(_|%|\\)/\\$1/g;
+	# we want *$pattern*
+	$pattern = "%$pattern%";
+	# we use '*' wildcarding.
+	$pattern =~ s/\*/%/g;
 
-  return $pattern;
+	return $pattern;
 }
 
 # @param server $server
@@ -516,48 +516,48 @@ sub sql_like_escape {
 #
 # @return void
 sub quote_search {
-  my ($server, $target, $pattern) = @_;
-  if (!$server || !$target || !defined $pattern) {
-    &log("invalid param");
-    return;
-  }
+	my ($server, $target, $pattern) = @_;
+	if (!$server || !$target || !defined $pattern) {
+		&log("invalid param");
+		return;
+	}
 
-  my $sql_pattern = &sql_like_escape($pattern);
+	my $sql_pattern = &sql_like_escape($pattern);
 
-  # check whether the global cache has a result for this search
-  if (!$search_quotes || !exists $search_quotes->{$pattern}) {
-    &log("Fetching new quotes for search: *$pattern*");
-    my $sql = qq/
+	# check whether the global cache has a result for this search
+	if (!$search_quotes || !exists $search_quotes->{$pattern}) {
+		&log("Fetching new quotes for search: *$pattern*");
+		my $sql = qq/
 SELECT * FROM quote
 WHERE quote ILIKE ?
 ORDER BY id ASC
 /;
-    my @params = ($sql_pattern);
-    my $href = &db_select($sql, \@params);
-    if (!$href || !%$href) {
-      &msg($server, $target, "No quotes found matching *$pattern*.");
-      return;
-    }
+		my @params = ($sql_pattern);
+		my $href = &db_select($sql, \@params);
+		if (!$href || !%$href) {
+			&msg($server, $target, "No quotes found matching *$pattern*.");
+			return;
+		}
 
-    # place the result in the global cache
-    $search_quotes->{$pattern} = $href;
-  }
+		# place the result in the global cache
+		$search_quotes->{$pattern} = $href;
+	}
 
-  # pull a result out of the global cache
-  my $id = (keys %{$search_quotes->{$pattern}})[0];
-  my $quote_href = $search_quotes->{$pattern}->{$id};
-  delete $search_quotes->{$pattern}->{$id};
+	# pull a result out of the global cache
+	my $id = (keys %{$search_quotes->{$pattern}})[0];
+	my $quote_href = $search_quotes->{$pattern}->{$id};
+	delete $search_quotes->{$pattern}->{$id};
 
-  # remove the cache key for this search if there are none remaining
-  my $count_left = scalar (keys %{$search_quotes->{$pattern}});
-  delete $search_quotes->{$pattern} if $count_left == 0;
+	# remove the cache key for this search if there are none remaining
+	my $count_left = scalar (keys %{$search_quotes->{$pattern}});
+	delete $search_quotes->{$pattern} if $count_left == 0;
 
-  # Record that we showed this quote from a search.
-  # This is to track popular quotes.
-  # I don't check success here because either way I want to proceed.
-  &_record_quote_was_searched($quote_href->{ id });
+	# Record that we showed this quote from a search.
+	# This is to track popular quotes.
+	# I don't check success here because either way I want to proceed.
+	&_record_quote_was_searched($quote_href->{ id });
 
-  &spew_quote($server, $target, $quote_href, $count_left, $pattern);
+	&spew_quote($server, $target, $quote_href, $count_left, $pattern);
 }
 
 # Record into the database that someone searched for and found this quote.
@@ -592,44 +592,44 @@ sub _record_quote_was_searched {
 #
 # @return void
 sub quote_count {
-  my ($server, $target, $pattern) = @_;
-  if (!$server || !$target || !defined $pattern) {
-    &log("invalid param");
-    return;
-  }
+	my ($server, $target, $pattern) = @_;
+	if (!$server || !$target || !defined $pattern) {
+		&log("invalid param");
+		return;
+	}
 
-  my $sql_pattern = &sql_like_escape($pattern);
+	my $sql_pattern = &sql_like_escape($pattern);
 
-  # get the count of quotes matching the pattern
-  my $sql = qq/
+	# get the count of quotes matching the pattern
+	my $sql = qq/
 SELECT COUNT(1) FROM quote WHERE LOWER(quote) LIKE LOWER(?)
 /;
-  my @params = ($sql_pattern);
-  my $href = &db_select($sql, \@params, 'count');
-  if (!$href || !%$href) {
-    &msg($server, $target, "Failed to find count.");
-    return;
-  }
-  # one and only key of hash should be the count
-  if (scalar(keys(%$href)) != 1) {
-    &msg($server, $target, "Count not found.");
-    return;
-  }
-  my $count = (keys(%$href))[0];
+	my @params = ($sql_pattern);
+	my $href = &db_select($sql, \@params, 'count');
+	if (!$href || !%$href) {
+		&msg($server, $target, "Failed to find count.");
+		return;
+	}
+	# one and only key of hash should be the count
+	if (scalar(keys(%$href)) != 1) {
+		&msg($server, $target, "Count not found.");
+		return;
+	}
+	my $count = (keys(%$href))[0];
 
-  # get the total count
-  my $total_count = &get_quote_count;
-  if (!$total_count) {
-    &msg($server, $target, "Failed to find total count of quotes.");
-    return;
-  }
+	# get the total count
+	my $total_count = &get_quote_count;
+	if (!$total_count) {
+		&msg($server, $target, "Failed to find total count of quotes.");
+		return;
+	}
 
-  # calculate %
-  my $percent = $count / $total_count * 100;
-  $percent = sprintf "%.2f", $percent;
+	# calculate %
+	my $percent = $count / $total_count * 100;
+	$percent = sprintf "%.2f", $percent;
 
-  &msg($server, $target,
-    "There are $count/$total_count ($percent%) quotes matching *$pattern*.");
+	&msg($server, $target,
+		"There are $count/$total_count ($percent%) quotes matching *$pattern*.");
 }
 
 # @param server $server
@@ -639,41 +639,41 @@ SELECT COUNT(1) FROM quote WHERE LOWER(quote) LIKE LOWER(?)
 #
 # output information about our stored state/memory
 sub quote_memory {
-  my ($server, $target) = @_;
-  if (!$server || !$target) {
-    &log("invalid parameter");
-    return;
-  }
+	my ($server, $target) = @_;
+	if (!$server || !$target) {
+		&log("invalid parameter");
+		return;
+	}
 
-  # find how many random quotes currently cached.
-  my $random_quote_count = 0;
-  $random_quote_count = scalar (keys %$random_quotes) if $random_quotes;
+	# find how many random quotes currently cached.
+	my $random_quote_count = 0;
+	$random_quote_count = scalar (keys %$random_quotes) if $random_quotes;
 
-  # find how many search strings stored.
-  my $search_string_count = 0;
-  $search_string_count = scalar (keys %$search_quotes) if $search_quotes;
+	# find how many search strings stored.
+	my $search_string_count = 0;
+	$search_string_count = scalar (keys %$search_quotes) if $search_quotes;
 
-  # find how many quotes are stored for all search strings.
-  my $search_quote_count = 0;
-  if ($search_quotes) {
-    foreach my $str (keys %$search_quotes) {
-      my $search_href = $search_quotes->{$str};
-      $search_quote_count += scalar (keys %{ $search_href });
-    }
-  }
+	# find how many quotes are stored for all search strings.
+	my $search_quote_count = 0;
+	if ($search_quotes) {
+		foreach my $str (keys %$search_quotes) {
+			my $search_href = $search_quotes->{$str};
+			$search_quote_count += scalar (keys %{ $search_href });
+		}
+	}
 
-  my $total_quote_count = $random_quote_count + $search_quote_count;
+	my $total_quote_count = $random_quote_count + $search_quote_count;
 
-  my @msgs = (
-    qq/Currently caching $total_quote_count quotes:/,
-    qq/    $random_quote_count random quotes/,
-    qq/    $search_quote_count search results for $search_string_count/
-        . qq/ search strings/,
-  );
+	my @msgs = (
+		qq/Currently caching $total_quote_count quotes:/,
+		qq/    $random_quote_count random quotes/,
+		qq/    $search_quote_count search results for $search_string_count/
+			. qq/ search strings/,
+	);
 
-  foreach my $msg (@msgs) {
-    &msg($server, $target, $msg);
-  }
+	foreach my $msg (@msgs) {
+		&msg($server, $target, $msg);
+	}
 }
 
 # @param server $server
@@ -683,14 +683,14 @@ sub quote_memory {
 #
 # free cached quotes.
 sub quote_free {
-  my ($server, $target) = @_;
-  if (!$server || !$target) {
-    &log("invalid parameter");
-    return;
-  }
+	my ($server, $target) = @_;
+	if (!$server || !$target) {
+		&log("invalid parameter");
+		return;
+	}
 
-  &clear_quote_cache;
-  &msg($server, $target, "Quote cache cleared.");
+	&clear_quote_cache;
+	&msg($server, $target, "Quote cache cleared.");
 }
 
 # @param server $server
@@ -700,11 +700,11 @@ sub quote_free {
 #
 # get a count of quotes missing date and added by.
 sub quote_missing {
-  my ($server, $target) = @_;
-  if (!$server || !$target) {
-    &log("invalid parameter");
-    return;
-  }
+	my ($server, $target) = @_;
+	if (!$server || !$target) {
+		&log("invalid parameter");
+		return;
+	}
 	my $sql = '
 		SELECT COUNT(1)
 		FROM quote
@@ -956,46 +956,46 @@ sub quote_rank {
 #
 # @return void
 sub handle_command {
-  my ($server, $target, $msg) = @_;
-  if (!$server || !$target || !defined $msg) {
-    &log("invalid param");
-    return;
-  }
+	my ($server, $target, $msg) = @_;
+	if (!$server || !$target || !defined $msg) {
+		&log("invalid param");
+		return;
+	}
 
-  # trim whitespace
-  $msg =~ s/^\s+|\s+$//g;
+	# trim whitespace
+	$msg =~ s/^\s+|\s+$//g;
 
-  # NOTE: we handle case insensitivity in a function above this as
-  #       we cannot trigger on 'Quote' for self messages (else output
-  #       of the quote triggers on itself).
+	# NOTE: we handle case insensitivity in a function above this as
+	#       we cannot trigger on 'Quote' for self messages (else output
+	#       of the quote triggers on itself).
 
-  # quotestats
-  return &quote_stats($server, $target)if $msg =~ /^!?quotestats$/;
+	# quotestats
+	return &quote_stats($server, $target)if $msg =~ /^!?quotestats$/;
 
-  # latest
-  return &quote_latest($server, $target) if $msg =~ /^!?latest$/;
+	# latest
+	return &quote_latest($server, $target) if $msg =~ /^!?latest$/;
 
-  # latest <search string>
-  return &quote_latest_search($server, $target, $1)
-    if $msg =~ /^!?latest\s+(.+)$/;
+	# latest <search string>
+	return &quote_latest_search($server, $target, $1)
+		if $msg =~ /^!?latest\s+(.+)$/;
 
-  # quote
-  return &quote_random($server, $target) if $msg =~ /^!?quote$/;
+	# quote
+	return &quote_random($server, $target) if $msg =~ /^!?quote$/;
 
-  # quote <#>
-  return &quote_id($server, $target, $1) if $msg =~ /^!?quote\s+(\d+)$/;
+	# quote <#>
+	return &quote_id($server, $target, $1) if $msg =~ /^!?quote\s+(\d+)$/;
 
-  # quote <search string>
-  return &quote_search($server, $target, $1) if $msg =~ /^!?quote\s+(.+)$/;
+	# quote <search string>
+	return &quote_search($server, $target, $1) if $msg =~ /^!?quote\s+(.+)$/;
 
-  # quotecount <search string>
-  return &quote_count($server, $target, $1) if $msg =~ /^!?quotecount\s+(.+)$/;
+	# quotecount <search string>
+	return &quote_count($server, $target, $1) if $msg =~ /^!?quotecount\s+(.+)$/;
 
-  # quotememory
-  return &quote_memory($server, $target) if $msg =~ /^!?quotememory$/;
+	# quotememory
+	return &quote_memory($server, $target) if $msg =~ /^!?quotememory$/;
 
-  # quotefree
-  return &quote_free($server, $target) if $msg =~ /^!?quotefree$/;
+	# quotefree
+	return &quote_free($server, $target) if $msg =~ /^!?quotefree$/;
 
 	# quotemissing
 	return &quote_missing($server, $target) if $msg =~ /^!?quotemissing$/;
@@ -1041,10 +1041,10 @@ sub handle_command {
 # Check if given channel is in the settings string
 sub channel_in_settings_str {
 	my ($settings_str, $channel) = @_;
-  if (!$settings_str || !$channel) {
-    &log("invalid param");
-    return 0;
-  }
+	if (!$settings_str || !$channel) {
+		&log("invalid param");
+		return 0;
+	}
 
 	my $raw_settings_str = Irssi::settings_get_str($settings_str);
 	my @settings = split / /, $raw_settings_str;
@@ -1059,17 +1059,17 @@ sub channel_in_settings_str {
 #
 # @return void
 sub sig_msg_pub {
-  my ($server, $msg, $nick, $address, $target) = @_;
-  if (!$server || !defined $msg || !$nick || !$address || !$target) {
-    &log("invalid param");
-    return;
-  }
+	my ($server, $msg, $nick, $address, $target) = @_;
+	if (!$server || !defined $msg || !$nick || !$address || !$target) {
+		&log("invalid param");
+		return;
+	}
 
-  $msg = lc $msg;
+	$msg = lc $msg;
 
-  # Only trigger in enabled channels
-  return unless &channel_in_settings_str('quote_channels', $target);
-  &handle_command($server, $target, $msg);
+	# Only trigger in enabled channels
+	return unless &channel_in_settings_str('quote_channels', $target);
+	&handle_command($server, $target, $msg);
 }
 
 # @param server $server
@@ -1078,18 +1078,18 @@ sub sig_msg_pub {
 #
 # @return void
 sub sig_msg_own_pub {
-  my ($server, $msg, $target) = @_;
-  if (!$server || !defined $msg || !$target) {
-    &log("invalid param");
-    return;
-  }
+	my ($server, $msg, $target) = @_;
+	if (!$server || !defined $msg || !$target) {
+		&log("invalid param");
+		return;
+	}
 
-  # we WANT case sensitivity for own messages, or else we print
-  # out quotes again due to the 'Quote #' quote header.
+	# we WANT case sensitivity for own messages, or else we print
+	# out quotes again due to the 'Quote #' quote header.
 
-  # Only trigger in enabled channels
-  return unless &channel_in_settings_str('quote_channels', $target);
-  &handle_command($server, $target, $msg);
+	# Only trigger in enabled channels
+	return unless &channel_in_settings_str('quote_channels', $target);
+	&handle_command($server, $target, $msg);
 }
 
 Irssi::signal_add('message public', 'sig_msg_pub');
