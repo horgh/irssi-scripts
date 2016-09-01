@@ -18,11 +18,11 @@
 #
 # -- Record when someone's search turns up a quote.
 # CREATE TABLE quote_search (
-# 	id SERIAL,
-# 	create_time TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT current_timestamp,
-# 	quote_id INTEGER NOT NULL REFERENCES quote(id)
-# 		ON UPDATE CASCADE ON DELETE CASCADE,
-# 	PRIMARY KEY (id)
+#   id SERIAL,
+#   create_time TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT current_timestamp,
+#   quote_id INTEGER NOT NULL REFERENCES quote(id)
+#     ON UPDATE CASCADE ON DELETE CASCADE,
+#   PRIMARY KEY (id)
 # );
 #
 
@@ -42,6 +42,9 @@ my $DB_PASS = 'quote';
 
 my $dsn = "dbi:Pg:dbname=$DB_NAME;host=$DB_HOST";
 
+# Time zone to display quote dates in.
+my $TIME_ZONE = 'America/Vancouver';
+
 # Done config
 
 use vars qw($VERSION %IRSSI);
@@ -58,8 +61,10 @@ $VERSION = "20160605";
 
 # Global database handle
 my $dbh;
+
 # Random quote cache: id -> quote
 my $random_quotes;
+
 # Search quote cache: str -> id -> quote
 my $search_quotes;
 
@@ -301,9 +306,10 @@ sub spew_quote {
   # date line
 	my $date;
 	if (defined $quote_href->{ create_time}) {
-		my $dt_parser = DateTime::Format::Pg->parse_timestamp(
+		my $datetime = DateTime::Format::Pg->parse_timestamptz(
 			$quote_href->{create_time});
-		$date = DateTime::Format::Pg->format_date($dt_parser);
+		$datetime->set_time_zone($TIME_ZONE);
+		$date = $datetime->strftime("%Y-%m-%d %H:%M:%S %z");
 	} else {
 		$date = 'missing';
 	}
