@@ -12,6 +12,10 @@
 #  create_time TIMESTAMP WITH TIME ZONE DEFAULT current_timestamp,
 #  quote VARCHAR NOT NULL,
 #  added_by VARCHAR,
+#  -- Manually set an update time when you update the quote.
+#  update_time TIMESTAMP WITH TIME ZONE,
+#  -- Manually add a note if you change the quote.
+#  update_notes VARCHAR,
 #  UNIQUE (quote),
 #  PRIMARY KEY (id)
 # );
