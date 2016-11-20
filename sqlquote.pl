@@ -17,7 +17,7 @@
 #  -- Manually add a note if you change the quote.
 #  update_notes VARCHAR,
 #  -- Flag a quote as sensitive
-#  sensitive BOOL NOT NULL,
+#  sensitive BOOL NOT NULL DEFAULT false,
 #  UNIQUE (quote),
 #  PRIMARY KEY (id)
 # );
