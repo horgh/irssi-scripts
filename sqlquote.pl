@@ -16,6 +16,8 @@
 #  update_time TIMESTAMP WITH TIME ZONE,
 #  -- Manually add a note if you change the quote.
 #  update_notes VARCHAR,
+#  -- Flag a quote as sensitive
+#  sensitive BOOL NOT NULL,
 #  UNIQUE (quote),
 #  PRIMARY KEY (id)
 # );
