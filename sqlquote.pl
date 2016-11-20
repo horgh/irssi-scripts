@@ -54,7 +54,7 @@ my $TIME_ZONE = 'America/Vancouver';
 # Done config
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "20160605";
+$VERSION = "20161120";
 %IRSSI = (
 	authors     => "Will Storey",
 	contact     => "will\@summercat.com",
@@ -350,7 +350,9 @@ sub quote_latest {
 	}
 
 	my $sql = qq/
-SELECT * FROM quote ORDER BY id DESC LIMIT 1
+SELECT * FROM quote
+WHERE 1=1 / . &_sensitive_sql($target) . qq/
+ORDER BY id DESC LIMIT 1
 /;
 	my @params = ();
 	my $href = &db_select($sql, \@params);
@@ -383,6 +385,7 @@ sub quote_latest_search {
 	my $sql = qq/
 SELECT * FROM quote
 WHERE quote ILIKE ?
+/ . &_sensitive_sql($target) . qq/
 ORDER BY id DESC
 LIMIT 1
 /;
@@ -421,7 +424,9 @@ sub quote_random {
 	if (!$random_quotes || !%$random_quotes) {
 		&log("Fetching new random quotes.");
 		my $sql = qq/
-SELECT * FROM quote ORDER BY random() LIMIT 20
+SELECT * FROM quote
+WHERE 1=1 / . &_sensitive_sql($target) . qq/
+ORDER BY random() LIMIT 20
 /;
 		my @params = ();
 		my $href = &db_select($sql, \@params);
@@ -446,7 +451,10 @@ sub _look_up_quote {
 		return undef;
 	}
 
-	my $sql = 'SELECT id, quote, create_time, added_by FROM quote WHERE id = ?';
+	my $sql = '
+		SELECT id, quote, create_time, added_by
+		FROM quote WHERE id = ?
+	';
 	my @params = ($id);
 	my $rows = &db_select_array($sql, \@params);
 	if (!$rows) {
@@ -480,6 +488,7 @@ sub quote_id {
 
 	my $sql = qq/
 SELECT * FROM quote WHERE id = ?
+/ . &_sensitive_sql($target) . qq/
 /;
 	my @params = ($id);
 	my $href = &db_select($sql, \@params);
@@ -536,6 +545,7 @@ sub quote_search {
 		my $sql = qq/
 SELECT * FROM quote
 WHERE quote ILIKE ?
+/ . &_sensitive_sql($target) . qq/
 ORDER BY id ASC
 /;
 		my @params = ($sql_pattern);
@@ -746,6 +756,7 @@ sub quote_get_missing {
 	my $sql = '
 		SELECT id FROM quote
 		WHERE create_time IS NULL OR added_by IS NULL
+		' . &_sensitive_sql($target) . '
 		ORDER BY random()
 		LIMIT 1
 	';
@@ -920,6 +931,8 @@ sub quote_rank {
 		LEFT JOIN quote q
 		ON q.id = qs.quote_id
 
+		WHERE 1=1 / . &_sensitive_sql($target) . q/
+
 		GROUP BY q.id
 
 		ORDER BY count DESC, q.id ASC
@@ -1039,6 +1052,20 @@ sub handle_command {
 	}
 }
 
+sub _sensitive_sql {
+	my ($channel) = @_;
+	if (&_channel_includes_sensitive($channel)) {
+		return '';
+	}
+
+	return ' AND sensitive = false ';
+}
+
+sub _channel_includes_sensitive {
+	my ($channel) = @_;
+	return &channel_in_settings_str('quote_channels_sensitive', $channel);
+}
+
 # @param string $settings_str  Name of the setting
 # @param string $channel       Channel name
 #
@@ -1101,7 +1128,10 @@ sub sig_msg_own_pub {
 Irssi::signal_add('message public', 'sig_msg_pub');
 Irssi::signal_add('message own_public', 'sig_msg_own_pub');
 
+# Channels where quote triggers work.
 Irssi::settings_add_str('quote', 'quote_channels', '');
+# Channels where we include display quotes.
+Irssi::settings_add_str('quote', 'quote_channels_sensitive', '');
 
 # timer to clear the quote cache every 24 hours.
 # timer takes time to run in milliseconds.
