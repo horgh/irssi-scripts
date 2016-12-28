@@ -19,6 +19,8 @@
 #  update_notes VARCHAR,
 #  -- Flag a quote as sensitive
 #  sensitive BOOL NOT NULL DEFAULT false,
+#  -- Optional image associated with the quote.
+#  image VARCHAR,
 #  UNIQUE (quote),
 #  PRIMARY KEY (id)
 # );
@@ -36,9 +38,9 @@
 use warnings;
 use strict;
 
+use DateTime::Format::Pg ();
 use DBI ();
 use Irssi ();
-use DateTime::Format::Pg ();
 
 # Config
 
@@ -51,6 +53,9 @@ my $dsn = "dbi:Pg:dbname=$DB_NAME;host=$DB_HOST";
 
 # Time zone to display quote dates in.
 my $TIME_ZONE = 'America/Vancouver';
+
+# Base URL to the associated quote website.
+my $QUOTE_URL = '';
 
 # Done config
 
@@ -335,6 +340,12 @@ sub spew_quote {
 		next if $line =~ /^\s*$/;
 		&msg($server, $target, " $line");
 	}
+
+	if (exists $quote_href->{ image } && length $quote_href->{ image } > 0) {
+		# Expect the image path to be URI safe.
+		my $url = $QUOTE_URL . $quote_href->{ image };
+		&msg($server, $target, " Image: $url");
+	}
 }
 
 # @param server $server
@@ -443,36 +454,6 @@ ORDER BY random() LIMIT 20
 	delete $random_quotes->{$id};
 
 	&spew_quote($server, $target, $quote_href);
-}
-
-sub _look_up_quote {
-	my ($id) = @_;
-	if (!defined $id) {
-		&log('Invalid parameter');
-		return undef;
-	}
-
-	my $sql = '
-		SELECT id, quote, create_time, added_by
-		FROM quote WHERE id = ?
-	';
-	my @params = ($id);
-	my $rows = &db_select_array($sql, \@params);
-	if (!$rows) {
-		&log('Unable to retrieve rows');
-		return undef;
-	}
-	if (@{ $rows } != 1) {
-		&log('Quote not found.');
-		return undef;
-	}
-
-	{
-		id          => $rows->[0][0],
-		quote       => $rows->[0][1],
-		create_time => $rows->[0][2],
-		added_by    => $rows->[0][3],
-	}
 }
 
 # @param server $server
@@ -726,7 +707,8 @@ sub quote_rank {
 		q.id AS id,
 		q.quote AS quote,
 		q.create_time AS create_time,
-		q.added_by AS added_by
+		q.added_by AS added_by,
+		q.image
 
 		FROM quote_search qs
 		LEFT JOIN quote q
@@ -815,7 +797,8 @@ sub handle_command {
 	return &quote_added_by_top($server, $target) if $msg =~ /^!?quoteaddedbytop$/;
 
 	# quoteaddedbytop <days>
-	return &quote_added_by_top_days($server, $target, $1) if $msg =~ /^!?quoteaddedbytop\s+(\d+)$/;
+	return &quote_added_by_top_days($server, $target, $1)
+		if $msg =~ /^!?quoteaddedbytop\s+(\d+)$/;
 
 	# quoterank
 	if ($msg =~ /^!?quoterank$/i) {
