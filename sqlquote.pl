@@ -1,8 +1,9 @@
 #
-# 2011-12-17
-# will@summercat.com
+# Interact with a database of quotes using DBI. Provide quote display and
+# searching functionality to configured channels.
 #
-# Interact with a database of quotes using DBI
+# This script does not support adding quotes. To do that I use
+# https://github.com/horgh/quote-site
 #
 # PostgreSQL schema:
 #
@@ -54,15 +55,15 @@ my $TIME_ZONE = 'America/Vancouver';
 # Done config
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "20161120";
+$VERSION = "20161228";
 %IRSSI = (
 	authors     => "Will Storey",
 	contact     => "will\@summercat.com",
 	name        => "sqlquote",
 	description => "Quote SQL database interaction",
 	license     => "Public domain",
-	url         => "http://www.summercat.com",
-	changed     => $VERSION
+	url         => "https://github.com/horgh/irssi-scripts",
+	changed     => $VERSION,
 );
 
 # Global database handle
@@ -648,139 +649,6 @@ SELECT COUNT(1) FROM quote WHERE LOWER(quote) LIKE LOWER(?)
 		"There are $count/$total_count ($percent%) quotes matching *$pattern*.");
 }
 
-# @param server $server
-# @param string $target   channel
-#
-# @return void
-#
-# output information about our stored state/memory
-sub quote_memory {
-	my ($server, $target) = @_;
-	if (!$server || !$target) {
-		&log("invalid parameter");
-		return;
-	}
-
-	# find how many random quotes currently cached.
-	my $random_quote_count = 0;
-	$random_quote_count = scalar (keys %$random_quotes) if $random_quotes;
-
-	# find how many search strings stored.
-	my $search_string_count = 0;
-	$search_string_count = scalar (keys %$search_quotes) if $search_quotes;
-
-	# find how many quotes are stored for all search strings.
-	my $search_quote_count = 0;
-	if ($search_quotes) {
-		foreach my $str (keys %$search_quotes) {
-			my $search_href = $search_quotes->{$str};
-			$search_quote_count += scalar (keys %{ $search_href });
-		}
-	}
-
-	my $total_quote_count = $random_quote_count + $search_quote_count;
-
-	my @msgs = (
-		qq/Currently caching $total_quote_count quotes:/,
-		qq/    $random_quote_count random quotes/,
-		qq/    $search_quote_count search results for $search_string_count/
-			. qq/ search strings/,
-	);
-
-	foreach my $msg (@msgs) {
-		&msg($server, $target, $msg);
-	}
-}
-
-# @param server $server
-# @param string $target   channel
-#
-# @return void
-#
-# free cached quotes.
-sub quote_free {
-	my ($server, $target) = @_;
-	if (!$server || !$target) {
-		&log("invalid parameter");
-		return;
-	}
-
-	&clear_quote_cache;
-	&msg($server, $target, "Quote cache cleared.");
-}
-
-# @param server $server
-# @param string $target   channel
-#
-# @return void
-#
-# get a count of quotes missing date and added by.
-sub quote_missing {
-	my ($server, $target) = @_;
-	if (!$server || !$target) {
-		&log("invalid parameter");
-		return;
-	}
-	my $sql = '
-		SELECT COUNT(1)
-		FROM quote
-		WHERE create_time IS NULL OR
-		added_by IS NULL
-	';
-	my @params;
-	my $rows = &db_select_array($sql, \@params);
-	if (!$rows) {
-		&log('Unable to retrieve rows');
-		return;
-	}
-	if (@{ $rows } != 1) {
-		&log('Unexpected row count');
-		return;
-	}
-	my $count_missing = $rows->[0][0];
-
-	my $count_total = &get_quote_count;
-	my $percent_missing = sprintf '%.2f', ($count_missing/$count_total*100);
-
-	my $msg = "$count_missing/$count_total ($percent_missing%) quotes are missing added by and/or added time.";
-
-	&msg($server, $target, $msg);
-}
-
-sub quote_get_missing {
-	my ($server, $target) = @_;
-	if (!$server || !$target) {
-		&log("Invalid parameter");
-		return;
-	}
-	my $sql = '
-		SELECT id FROM quote
-		WHERE create_time IS NULL OR added_by IS NULL
-		' . &_sensitive_sql($target) . '
-		ORDER BY random()
-		LIMIT 1
-	';
-	my @params;
-	my $rows = &db_select_array($sql, \@params);
-	if (!$rows) {
-		&log('Unable to retrieve rows');
-		return;
-	}
-	if (@{ $rows } != 1) {
-		&log('Unexpected row count');
-		return;
-	}
-	my $id = $rows->[0][0];
-
-	my $quote = &_look_up_quote($id);
-	if (!$quote) {
-		&log("Unable to look up quote");
-		return;
-	}
-
-	&spew_quote($server, $target, $quote);
-}
-
 sub quote_added_by_top {
 	my ($server, $target) = @_;
 	if (!$server || !$target) {
@@ -839,73 +707,6 @@ sub quote_added_by_top_days {
 		my $msg = " $name: $count";
 		&msg($server, $target, $msg);
 	}
-}
-
-sub quote_set_added_by {
-	my ($server, $target, $id, $nick) = @_;
-	if (!$server || !$target || !defined $id || !defined $nick ||
-		length $nick == 0) {
-		&log("invalid parameter");
-		return;
-	}
-
-	# find the quote's current information so we know it exists and that
-	# it is missing the added by.
-	my $quote = &_look_up_quote($id);
-	if (!$id) {
-		&msg($server, $target, 'Quote not found.');
-		return;
-	}
-
-	if (defined $quote->{ added_by }) {
-		&msg($server, $target, 'That quote already has an added by.');
-		return;
-	}
-
-	my $sql = 'UPDATE quote SET added_by = ? WHERE id = ?';
-	my @params = ($nick, $id);
-	my $row_count = &db_manipulate($sql, \@params);
-	if (!defined $row_count) {
-		&log('Problem performing update');
-		return;
-	}
-	&msg($server, $target, "Quote updated.");
-}
-
-sub quote_set_time {
-	my ($server, $target, $id, $time) = @_;
-	if (!$server || !$target || !defined $id || !defined $time ||
-		length $time == 0) {
-		&log("invalid parameter");
-		return;
-	}
-
-	# find the quote's current information so we know it exists and that
-	# it is missing the added by.
-	my $quote = &_look_up_quote($id);
-	if (!$id) {
-		&msg($server, $target, 'Quote not found.');
-		return;
-	}
-
-	if (defined $quote->{ create_time }) {
-		&msg($server, $target, 'That quote already has a time.');
-		return;
-	}
-
-	if ($time !~ /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/) {
-		&msg($server, $target, "Please use 24h time format YYYY-MM-DD HH:MM:SS");
-		return;
-	}
-
-	my $sql = 'UPDATE quote SET create_time = ? WHERE id = ?';
-	my @params = ($time, $id);
-	my $row_count = &db_manipulate($sql, \@params);
-	if (!defined $row_count) {
-		&log('Problem performing update');
-		return;
-	}
-	&msg($server, $target, "Quote updated.");
 }
 
 sub quote_rank {
@@ -1010,35 +811,11 @@ sub handle_command {
 	# quotecount <search string>
 	return &quote_count($server, $target, $1) if $msg =~ /^!?quotecount\s+(.+)$/;
 
-	# quotememory
-	return &quote_memory($server, $target) if $msg =~ /^!?quotememory$/;
-
-	# quotefree
-	return &quote_free($server, $target) if $msg =~ /^!?quotefree$/;
-
-	# quotemissing
-	return &quote_missing($server, $target) if $msg =~ /^!?quotemissing$/;
-
-	# quotegetmissing
-	return &quote_get_missing($server, $target) if $msg =~ /^!?quotegetmissing$/;
-
 	# quoteaddedbytop
 	return &quote_added_by_top($server, $target) if $msg =~ /^!?quoteaddedbytop$/;
 
 	# quoteaddedbytop <days>
 	return &quote_added_by_top_days($server, $target, $1) if $msg =~ /^!?quoteaddedbytop\s+(\d+)$/;
-
-	# quotesetaddedby <id> <nick>
-	return &quote_set_added_by($server, $target, $1, $2) if $msg =~ /^!?quotesetaddedby\s+(\d+)\s+(\S+)$/;
-	if ($msg =~ /^!?quotesetaddedby/) {
-		&msg($server, $target, "Usage: quotesetaddedby <quote number> <nick>");
-	}
-
-	# quotesettime <id> <time>
-	return &quote_set_time($server, $target, $1, $2) if $msg =~ /^!?quotesettime\s+(\d+)\s+(\S+\s+\S+)$/;
-	if ($msg =~ /^!?quotesettime/) {
-		&msg($server, $target, "Usage: quotesettime <quote number> <YYYY-MM-DD HH:MM:SS>");
-	}
 
 	# quoterank
 	if ($msg =~ /^!?quoterank$/i) {
