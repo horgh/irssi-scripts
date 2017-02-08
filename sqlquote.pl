@@ -341,7 +341,8 @@ sub spew_quote {
 		&msg($server, $target, " $line");
 	}
 
-	if (exists $quote_href->{ image } && length $quote_href->{ image } > 0) {
+	if (exists $quote_href->{ image } && defined $quote_href->{ image } &&
+		length $quote_href->{ image } > 0) {
 		# Expect the image path to be URI safe.
 		my $url = $QUOTE_URL . $quote_href->{ image };
 		&msg($server, $target, " Image: $url");
