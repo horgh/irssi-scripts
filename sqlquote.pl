@@ -54,13 +54,10 @@ my $dsn = "dbi:Pg:dbname=$DB_NAME;host=$DB_HOST";
 # Time zone to display quote dates in.
 my $TIME_ZONE = 'America/Vancouver';
 
-# Base URL to the associated quote website.
-my $QUOTE_URL = '';
-
 # Done config
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "20161228";
+$VERSION = "20170302";
 %IRSSI = (
 	authors     => "Will Storey",
 	contact     => "will\@summercat.com",
@@ -343,9 +340,13 @@ sub spew_quote {
 
 	if (exists $quote_href->{ image } && defined $quote_href->{ image } &&
 		length $quote_href->{ image } > 0) {
-		# Expect the image path to be URI safe.
-		my $url = $QUOTE_URL . $quote_href->{ image };
-		&msg($server, $target, " Image: $url");
+		my $site_url = Irssi::settings_get_str('quote_site_url');
+		$site_url =~ s/\/$//g;
+		if (length $site_url > 0) {
+			# We expect the image path to be URI safe.
+			my $image_url = $site_url . '/' . $quote_href->{ image };
+			&msg($server, $target, " Image: $image_url");
+		}
 	}
 }
 
@@ -893,6 +894,9 @@ Irssi::signal_add('message own_public', 'sig_msg_own_pub');
 Irssi::settings_add_str('quote', 'quote_channels', '');
 # Channels where we include display quotes.
 Irssi::settings_add_str('quote', 'quote_channels_sensitive', '');
+# URL to the quote site. We use this to generate image URL on quotes with
+# images.
+Irssi::settings_add_str('quote', 'quote_site_url', '');
 
 # timer to clear the quote cache every 24 hours.
 # timer takes time to run in milliseconds.
