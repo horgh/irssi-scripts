@@ -24,6 +24,8 @@
 #  sensitive BOOL NOT NULL DEFAULT false,
 #  -- Optional image associated with the quote.
 #  image VARCHAR,
+#  -- Optional title for the quote
+#  title VARCHAR,
 #  UNIQUE (quote),
 #  PRIMARY KEY (id)
 # );
@@ -316,6 +318,13 @@ sub spew_quote {
 	$header .= ": *$search*" if defined $search;
 	&msg($server, $target, $header);
 
+	# Title line
+	if (defined $quote_href->{ title }) {
+		&msg($server, $target, $quote_href->{ title });
+	} else {
+		&msg($server, $target, 'No title');
+	}
+
 	# Date line
 	my $date;
 	if (defined $quote_href->{ create_time}) {
@@ -559,7 +568,8 @@ sub quote_search {
 		my $sql_pattern = &sql_like_escape($pattern);
 		my $sql = qq/
 SELECT
-id, create_time, quote, added_by, update_time, update_notes, sensitive, image
+id, create_time, quote, added_by, title, update_time, update_notes, sensitive,
+	image
 FROM quote
 WHERE quote ILIKE ?
 / . &_sensitive_sql($target) . qq/
@@ -585,10 +595,11 @@ ORDER BY COALESCE(create_time, '1970-01-01') ASC, id ASC
 				create_time  => $row->[1],
 				quote        => $row->[2],
 				added_by     => $row->[3],
-				update_time  => $row->[4],
-				update_notes => $row->[5],
-				sensitive    => $row->[6],
-				image        => $row->[7],
+				title        => $row->[4],
+				update_time  => $row->[5],
+				update_notes => $row->[6],
+				sensitive    => $row->[7],
+				image        => $row->[8],
 			};
 		}
 
@@ -770,6 +781,7 @@ sub quote_rank {
 		q.quote AS quote,
 		q.create_time AS create_time,
 		q.added_by AS added_by,
+		q.title AS title,
 		q.image
 
 		FROM quote_search qs
@@ -802,6 +814,8 @@ sub quote_rank {
 		quote       => $rows->[0][2],
 		create_time => $rows->[0][3],
 		added_by    => $rows->[0][4],
+		title       => $rows->[0][5],
+		image       => $rows->[0][6],
 	};
 
 	my $votes = $rows->[0][0];
