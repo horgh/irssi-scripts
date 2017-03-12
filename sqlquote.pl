@@ -417,12 +417,12 @@ sub quote_latest_search {
 
 	my $sql = qq/
 SELECT * FROM quote
-WHERE quote ILIKE ?
+WHERE (quote ILIKE ? OR title ILIKE ?)
 / . &_sensitive_sql($target) . qq/
 ORDER BY id DESC
 LIMIT 1
 /;
-	my @params = ($sql_pattern);
+	my @params = ($sql_pattern, $sql_pattern);
 	my $href = &db_select($sql, \@params);
 	if (!$href || !%$href) {
 		&msg($server, $target, "No quotes found matching *$pattern*.");
@@ -571,11 +571,11 @@ SELECT
 id, create_time, quote, added_by, title, update_time, update_notes, sensitive,
 	image
 FROM quote
-WHERE quote ILIKE ?
+WHERE (quote ILIKE ? OR title ILIKE ?)
 / . &_sensitive_sql($target) . qq/
 ORDER BY COALESCE(create_time, '1970-01-01') ASC, id ASC
 /;
-		my @params = ($sql_pattern);
+		my @params = ($sql_pattern, $sql_pattern);
 
 		my $rows = &db_select_array($sql, \@params);
 		if (!$rows) {
@@ -671,16 +671,16 @@ sub quote_count {
 
 	my $sql_pattern = &sql_like_escape($pattern);
 
-	# get the count of quotes matching the pattern
 	my $sql = qq/
-SELECT COUNT(1) FROM quote WHERE LOWER(quote) LIKE LOWER(?)
+SELECT COUNT(1) FROM quote WHERE quote ILIKE ? OR title ILIKE ?
 /;
-	my @params = ($sql_pattern);
+	my @params = ($sql_pattern, $sql_pattern);
 	my $href = &db_select($sql, \@params, 'count');
 	if (!$href || !%$href) {
 		&msg($server, $target, "Failed to find count.");
 		return;
 	}
+
 	# one and only key of hash should be the count
 	if (scalar(keys(%$href)) != 1) {
 		&msg($server, $target, "Count not found.");
@@ -688,7 +688,6 @@ SELECT COUNT(1) FROM quote WHERE LOWER(quote) LIKE LOWER(?)
 	}
 	my $count = (keys(%$href))[0];
 
-	# get the total count
 	my $total_count = &get_quote_count;
 	if (!$total_count) {
 		&msg($server, $target, "Failed to find total count of quotes.");
