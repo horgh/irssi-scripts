@@ -34,6 +34,7 @@
 #   create_time TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT current_timestamp,
 #   quote_id INTEGER NOT NULL REFERENCES quote(id)
 #     ON UPDATE CASCADE ON DELETE CASCADE,
+#   nick VARCHAR,
 #   PRIMARY KEY (id)
 # );
 #
@@ -386,6 +387,7 @@ ORDER BY id DESC LIMIT 1
 }
 
 # @param server $server
+# @param string $nick The nick performing the search
 # @param string $target
 # @param string $pattern Search string
 #
@@ -393,9 +395,10 @@ ORDER BY id DESC LIMIT 1
 #
 # find the latest quote with the given search string and spew it
 sub quote_latest_search {
-	my ($server, $target, $pattern) = @_;
-	if (!$server || !$target || !defined $pattern) {
-		&log("invalid param");
+	my ($server, $nick, $target, $pattern) = @_;
+	if (!$server || !defined $nick || length $nick == 0 || !$target ||
+		!defined $pattern) {
+		&log("quote_latest_search: Invalid parameter");
 		return;
 	}
 
@@ -426,7 +429,7 @@ LIMIT 1
 
 	&spew_quote($server, $target, $quote_href);
 
-	&_record_quote_was_searched($quote_href->{ id });
+	&_record_quote_was_searched($quote_href->{ id }, $nick);
 }
 
 # @param server $server
@@ -467,14 +470,16 @@ ORDER BY random() LIMIT 20
 }
 
 # @param server $server
+# @param string $nick The nick performing the search
 # @param string $target
 # @param int $id         Quote id to fetch
 #
 # @return void
 sub quote_id {
-	my ($server, $target, $id) = @_;
-	if (!$server || !$target || !defined $id) {
-		&log("invalid param");
+	my ($server, $nick, $target, $id) = @_;
+	if (!$server || !defined $nick || length $nick == 0 || !$target ||
+		!defined $id) {
+		&log("quote_id: Invalid parameter");
 		return;
 	}
 
@@ -493,7 +498,7 @@ SELECT * FROM quote WHERE id = ?
 
 	&spew_quote($server, $target, $quote_href);
 
-	&_record_quote_was_searched($quote_href->{ id });
+	&_record_quote_was_searched($quote_href->{ id }, $nick);
 }
 
 # @param string $pattern Search string pattern
@@ -521,14 +526,16 @@ sub sql_like_escape {
 }
 
 # @param server $server
+# @param string $nick The nick performing the search
 # @param string $target
 # @param string $pattern Search string
 #
 # @return void
 sub quote_search {
-	my ($server, $target, $pattern) = @_;
-	if (!$server || !$target || !defined $pattern) {
-		&log("invalid param");
+	my ($server, $nick, $target, $pattern) = @_;
+	if (!$server || !defined $nick || length $nick == 0 || !$target ||
+		!defined $pattern) {
+		&log("quote_search: Invalid parameter");
 		return;
 	}
 
@@ -568,7 +575,7 @@ ORDER BY id ASC
 	# Record that we showed this quote from a search.
 	# This is to track popular quotes.
 	# I don't check success here because either way I want to proceed.
-	&_record_quote_was_searched($quote_href->{ id });
+	&_record_quote_was_searched($quote_href->{ id }, $nick);
 }
 
 # Record into the database that someone searched for and found this quote.
@@ -576,17 +583,22 @@ ORDER BY id ASC
 #
 # Parameters:
 # quote_id: Integer referring to a quote id in the database
+# nick: String. The nick of the person who searched.
 #
 # Returns: Boolean, whether we recorded successfully.
 sub _record_quote_was_searched {
-	my ($quote_id) = @_;
+	my ($quote_id, $nick) = @_;
 	if (!defined $quote_id) {
 		&log("_record_quote_was_searched: Missing quote identifier");
 		return 0;
 	}
+	if (!defined $nick || length $nick == 0) {
+		&log("_record_quote_was_searched: Missing nick");
+		return 0;
+	}
 
-	my $sql = 'INSERT INTO quote_search(quote_id) VALUES(?)';
-	my @params = ($quote_id);
+	my $sql = 'INSERT INTO quote_search(quote_id, nick) VALUES(?, ?)';
+	my @params = ($quote_id, $nick);
 
 	my $row_count = &db_manipulate($sql, \@params);
 	if (!defined $row_count || $row_count != 1) {
@@ -766,23 +778,24 @@ sub quote_rank {
 }
 
 # @param server $server
+# @param string $nick The nick performing the search
 # @param string $target
 # @param string $msg   Message on a channel enabled for triggers
 #
 # @return void
 sub handle_command {
-	my ($server, $target, $msg) = @_;
-	if (!$server || !$target || !defined $msg) {
-		&log("invalid param");
+	my ($server, $nick, $target, $msg) = @_;
+	if (!$server || !defined $nick || length $nick == 0 || !$target ||
+		!defined $msg) {
+		&log("handle_command: Invalid parameter");
 		return;
 	}
 
-	# trim whitespace
 	$msg =~ s/^\s+|\s+$//g;
 
-	# NOTE: we handle case insensitivity in a function above this as
-	#       we cannot trigger on 'Quote' for self messages (else output
-	#       of the quote triggers on itself).
+	# NOTE: We handle case insensitivity in the signal handlers (callers of this
+	# function) as we do not want to trigger on 'Quote' for messages we send
+	# ourselve. If we did, quote output would trigger itself.
 
 	# quotestats
 	return &quote_stats($server, $target)if $msg =~ /^!?quotestats$/;
@@ -791,17 +804,17 @@ sub handle_command {
 	return &quote_latest($server, $target) if $msg =~ /^!?latest$/;
 
 	# latest <search string>
-	return &quote_latest_search($server, $target, $1)
+	return &quote_latest_search($server, $nick, $target, $1)
 		if $msg =~ /^!?latest\s+(.+)$/;
 
 	# quote
 	return &quote_random($server, $target) if $msg =~ /^!?quote$/;
 
 	# quote <#>
-	return &quote_id($server, $target, $1) if $msg =~ /^!?quote\s+(\d+)$/;
+	return &quote_id($server, $nick, $target, $1) if $msg =~ /^!?quote\s+(\d+)$/;
 
 	# quote <search string>
-	return &quote_search($server, $target, $1) if $msg =~ /^!?quote\s+(.+)$/;
+	return &quote_search($server, $nick, $target, $1) if $msg =~ /^!?quote\s+(.+)$/;
 
 	# quotecount <search string>
 	return &quote_count($server, $target, $1) if $msg =~ /^!?quotecount\s+(.+)$/;
@@ -875,7 +888,8 @@ sub sig_msg_pub {
 
 	# Only trigger in enabled channels
 	return unless &channel_in_settings_str('quote_channels', $target);
-	&handle_command($server, $target, $msg);
+
+	&handle_command($server, $nick, $target, $msg);
 }
 
 # @param server $server
@@ -895,7 +909,8 @@ sub sig_msg_own_pub {
 
 	# Only trigger in enabled channels
 	return unless &channel_in_settings_str('quote_channels', $target);
-	&handle_command($server, $target, $msg);
+
+	&handle_command($server, $server->{ nick }, $target, $msg);
 }
 
 Irssi::signal_add('message public', 'sig_msg_pub');
