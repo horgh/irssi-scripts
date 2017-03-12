@@ -45,20 +45,6 @@ use DateTime::Format::Pg ();
 use DBI ();
 use Irssi ();
 
-# Config
-
-my $DB_HOST = 'beast';
-my $DB_NAME = 'quote';
-my $DB_USER = 'quote';
-my $DB_PASS = 'quote';
-
-my $dsn = "dbi:Pg:dbname=$DB_NAME;host=$DB_HOST";
-
-# Time zone to display quote dates in.
-my $TIME_ZONE = 'America/Vancouver';
-
-# Done config
-
 use vars qw($VERSION %IRSSI);
 $VERSION = "20170311";
 %IRSSI = (
@@ -103,7 +89,19 @@ sub log {
 # @return mixed DBI handle or undef
 sub get_dbh {
 	if (!$dbh || !$dbh->ping) {
-		$dbh = DBI->connect($dsn, $DB_USER, $DB_PASS);
+		my $db_host = Irssi::settings_get_str('quote_db_host');
+		my $db_name = Irssi::settings_get_str('quote_db_name');
+		my $db_user = Irssi::settings_get_str('quote_db_user');
+		my $db_pass = Irssi::settings_get_str('quote_db_pass');
+
+		if (length $db_host == 0 || length $db_name == 0 || length $db_user == 0 ||
+			length $db_pass == 0) {
+			&log("Missing database settings. See /set quote");
+			return undef;
+		}
+
+		my $dsn = "dbi:Pg:dbname=$db_name;host=$db_host";
+		$dbh = DBI->connect($dsn, $db_user, $db_pass);
 		if (!$dbh || !$dbh->ping) {
 			&log("failed to connect to database: " . $DBI::errstr);
 			return undef;
@@ -304,7 +302,7 @@ sub quote_stats {
 # @return void
 sub spew_quote {
 	my ($server, $target, $quote_href, $left, $search) = @_;
-	# left, search are optional
+	# left and search are optional
 	if (!$server || !$target || !$quote_href) {
 		&log("invalid param");
 		return;
@@ -315,12 +313,17 @@ sub spew_quote {
 	$header .= ": *$search*" if defined $search;
 	&msg($server, $target, $header);
 
-	# date line
+	# Date line
 	my $date;
 	if (defined $quote_href->{ create_time}) {
 		my $datetime = DateTime::Format::Pg->parse_timestamptz(
 			$quote_href->{create_time});
-		$datetime->set_time_zone($TIME_ZONE);
+
+		my $time_zone = Irssi::settings_get_str('quote_timezone');
+		if (length $time_zone > 0) {
+			$datetime->set_time_zone($time_zone);
+		}
+
 		$date = $datetime->strftime("%Y-%m-%d %H:%M:%S %z");
 	} else {
 		$date = 'missing';
@@ -328,7 +331,7 @@ sub spew_quote {
 	my $date_header = "Date: $date";
 	&msg($server, $target, $date_header);
 
-	# added by line
+	# Added by line
 	my $added_by = "Added by:";
 	if (defined $quote_href->{ added_by }) {
 		$added_by .= ' ' . $quote_href->{ added_by };
@@ -893,10 +896,27 @@ sub sig_msg_own_pub {
 Irssi::signal_add('message public', 'sig_msg_pub');
 Irssi::signal_add('message own_public', 'sig_msg_own_pub');
 
+# Database host.
+Irssi::settings_add_str('quote', 'quote_db_host', '');
+
+# Database name.
+Irssi::settings_add_str('quote', 'quote_db_name', '');
+
+# Database user.
+Irssi::settings_add_str('quote', 'quote_db_user', '');
+
+# Database pass.
+Irssi::settings_add_str('quote', 'quote_db_pass', '');
+
+# Time zone to display quote dates in.
+Irssi::settings_add_str('quote', 'quote_timezone', 'America/Vancouver');
+
 # Channels where quote triggers work.
 Irssi::settings_add_str('quote', 'quote_channels', '');
-# Channels where we include display quotes.
+
+# Channels where we include quotes that might be sensitive for display.
 Irssi::settings_add_str('quote', 'quote_channels_sensitive', '');
+
 # URL to the quote site. We use this to generate image URL on quotes with
 # images.
 Irssi::settings_add_str('quote', 'quote_site_url', '');
