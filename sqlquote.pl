@@ -399,7 +399,6 @@ sub quote_latest_search {
 		return;
 	}
 
-	# convert to sql wildcard
 	my $sql_pattern = &sql_like_escape($pattern);
 
 	my $sql = qq/
@@ -424,7 +423,10 @@ LIMIT 1
 	}
 
 	my $quote_href = $href->{$id};
+
 	&spew_quote($server, $target, $quote_href);
+
+	&_record_quote_was_searched($quote_href->{ id });
 }
 
 # @param server $server
@@ -488,7 +490,10 @@ SELECT * FROM quote WHERE id = ?
 	}
 
 	my $quote_href = $href->{$id};
+
 	&spew_quote($server, $target, $quote_href);
+
+	&_record_quote_was_searched($quote_href->{ id });
 }
 
 # @param string $pattern Search string pattern
@@ -558,12 +563,12 @@ ORDER BY id ASC
 	my $count_left = scalar (keys %{$search_quotes->{$pattern}});
 	delete $search_quotes->{$pattern} if $count_left == 0;
 
+	&spew_quote($server, $target, $quote_href, $count_left, $pattern);
+
 	# Record that we showed this quote from a search.
 	# This is to track popular quotes.
 	# I don't check success here because either way I want to proceed.
 	&_record_quote_was_searched($quote_href->{ id });
-
-	&spew_quote($server, $target, $quote_href, $count_left, $pattern);
 }
 
 # Record into the database that someone searched for and found this quote.
