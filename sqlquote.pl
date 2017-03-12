@@ -533,17 +533,19 @@ sub sql_like_escape {
 # @return void
 sub quote_search {
 	my ($server, $nick, $target, $pattern) = @_;
-	if (!$server || !defined $nick || length $nick == 0 || !$target ||
-		!defined $pattern) {
+	if (!$server || !defined $nick || length $nick == 0 || !defined $target ||
+		length $target == 0 || !defined $pattern || length $pattern == 0) {
 		&log("quote_search: Invalid parameter");
 		return;
 	}
 
-	my $sql_pattern = &sql_like_escape($pattern);
 
-	# check whether the global cache has a result for this search
-	if (!$search_quotes || !exists $search_quotes->{$pattern}) {
+	# Check whether the global cache has quotes for this search. If it doesn't
+	# query the database for quotes.
+	if (!$search_quotes || !exists $search_quotes->{ $pattern }) {
 		&log("Fetching new quotes for search: *$pattern*");
+
+		my $sql_pattern = &sql_like_escape($pattern);
 		my $sql = qq/
 SELECT * FROM quote
 WHERE quote ILIKE ?
@@ -557,24 +559,23 @@ ORDER BY id ASC
 			return;
 		}
 
-		# place the result in the global cache
-		$search_quotes->{$pattern} = $href;
+		# Place the quotes in the global cache.
+		$search_quotes->{ $pattern } = $href;
 	}
 
-	# pull a result out of the global cache
-	my $id = (keys %{$search_quotes->{$pattern}})[0];
-	my $quote_href = $search_quotes->{$pattern}->{$id};
-	delete $search_quotes->{$pattern}->{$id};
+	# Pull a quote out of the global cache
+	my $id = (keys %{ $search_quotes->{ $pattern } })[0];
+	my $quote_href = $search_quotes->{ $pattern }{ $id };
+	delete $search_quotes->{ $pattern }{ $id };
 
-	# remove the cache key for this search if there are none remaining
-	my $count_left = scalar (keys %{$search_quotes->{$pattern}});
-	delete $search_quotes->{$pattern} if $count_left == 0;
+	# If there are no more quotes remaining in the cache, drop the key.
+	my $count_left = scalar (keys %{ $search_quotes->{$pattern} });
+	if ($count_left == 0) {
+		delete $search_quotes->{ $pattern };
+	}
 
 	&spew_quote($server, $target, $quote_href, $count_left, $pattern);
 
-	# Record that we showed this quote from a search.
-	# This is to track popular quotes.
-	# I don't check success here because either way I want to proceed.
 	&_record_quote_was_searched($quote_href->{ id }, $nick);
 }
 
