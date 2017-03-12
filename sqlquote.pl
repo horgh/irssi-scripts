@@ -64,7 +64,9 @@ my $dbh;
 # Random quote cache: id -> quote
 my $random_quotes;
 
-# Search quote cache: str -> id -> quote
+# Search quote cache: pattern (string) -> array reference containing hash
+# references. Each hash reference element is one quote. They are ordered by
+# create date, ascending.
 my $search_quotes;
 
 # @param string $msg
@@ -303,13 +305,13 @@ sub quote_stats {
 # @return void
 sub spew_quote {
 	my ($server, $target, $quote_href, $left, $search) = @_;
-	# left and search are optional
-	if (!$server || !$target || !$quote_href) {
-		&log("invalid param");
+	# left and search are optional.
+	if (!$server || !defined $target || length $target == 0 || !$quote_href) {
+		&log("spew_quote: Invalid parameter");
 		return;
 	}
 
-	my $header = "Quote #\002" . $quote_href->{id} . "\002";
+	my $header = "Quote #\002" . $quote_href->{ id } . "\002";
 	$header .= " ($left left)" if defined $left;
 	$header .= ": *$search*" if defined $search;
 	&msg($server, $target, $header);
@@ -318,7 +320,7 @@ sub spew_quote {
 	my $date;
 	if (defined $quote_href->{ create_time}) {
 		my $datetime = DateTime::Format::Pg->parse_timestamptz(
-			$quote_href->{create_time});
+			$quote_href->{ create_time });
 
 		my $time_zone = Irssi::settings_get_str('quote_timezone');
 		if (length $time_zone > 0) {
@@ -339,7 +341,7 @@ sub spew_quote {
 	}
 	&msg($server, $target, $added_by);
 
-	foreach my $line (split /\n|\r/, $quote_href->{quote}) {
+	foreach my $line (split /\n|\r/, $quote_href->{ quote }) {
 		chomp $line;
 		next if $line =~ /^\s*$/;
 		&msg($server, $target, " $line");
@@ -525,6 +527,16 @@ sub sql_like_escape {
 	return $pattern;
 }
 
+# Search for quotes matching a *pattern*, and output one.
+#
+# This function caches all quotes matching the given pattern, and first checks
+# the cache for a result before going to the database. For one thing, this
+# allows us to easily cycle through all the results.
+#
+# This function outputs quotes in order of when they were added, ascending. If
+# a quote doesn't have an add date set, it uses an arbitrary date far in the
+# past.
+#
 # @param server $server
 # @param string $nick The nick performing the search
 # @param string $target
@@ -539,7 +551,6 @@ sub quote_search {
 		return;
 	}
 
-
 	# Check whether the global cache has quotes for this search. If it doesn't
 	# query the database for quotes.
 	if (!$search_quotes || !exists $search_quotes->{ $pattern }) {
@@ -547,29 +558,54 @@ sub quote_search {
 
 		my $sql_pattern = &sql_like_escape($pattern);
 		my $sql = qq/
-SELECT * FROM quote
+SELECT
+id, create_time, quote, added_by, update_time, update_notes, sensitive, image
+FROM quote
 WHERE quote ILIKE ?
 / . &_sensitive_sql($target) . qq/
-ORDER BY id ASC
+ORDER BY COALESCE(create_time, '1970-01-01') ASC, id ASC
 /;
 		my @params = ($sql_pattern);
-		my $href = &db_select($sql, \@params);
-		if (!$href || !%$href) {
+
+		my $rows = &db_select_array($sql, \@params);
+		if (!$rows) {
+			&msg($server, $target, "Error performing the search.");
+			return;
+		}
+
+		if (@{ $rows } == 0) {
 			&msg($server, $target, "No quotes found matching *$pattern*.");
 			return;
 		}
 
+		my @quotes;
+		foreach my $row (@{ $rows }) {
+			push @quotes, {
+				id           => $row->[0],
+				create_time  => $row->[1],
+				quote        => $row->[2],
+				added_by     => $row->[3],
+				update_time  => $row->[4],
+				update_notes => $row->[5],
+				sensitive    => $row->[6],
+				image        => $row->[7],
+			};
+		}
+
 		# Place the quotes in the global cache.
-		$search_quotes->{ $pattern } = $href;
+		$search_quotes->{ $pattern } = \@quotes;
 	}
 
+	# At this point there must be a quote available in the cache.
+
 	# Pull a quote out of the global cache
-	my $id = (keys %{ $search_quotes->{ $pattern } })[0];
-	my $quote_href = $search_quotes->{ $pattern }{ $id };
-	delete $search_quotes->{ $pattern }{ $id };
+	my $quote_href = $search_quotes->{ $pattern }[0];
+
+	# Remove it.
+	splice @{ $search_quotes->{ $pattern } }, 0, 1;
 
 	# If there are no more quotes remaining in the cache, drop the key.
-	my $count_left = scalar (keys %{ $search_quotes->{$pattern} });
+	my $count_left = scalar @{ $search_quotes->{ $pattern } };
 	if ($count_left == 0) {
 		delete $search_quotes->{ $pattern };
 	}
