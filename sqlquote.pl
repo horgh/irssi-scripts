@@ -1,8 +1,11 @@
 #
-# Interact with a database of quotes using DBI. Provide quote display and
-# searching functionality to configured channels.
+# This script provides in-channel interaction with a database of quotes. This
+# includes things like searching and displaying quotes in the channel.
 #
-# This script does not support adding quotes. To do that I use
+# It retrieves the quotes from a database using the DBI library. Currently the
+# script is written specifically for a PostgreSQL database. The schema is below.
+#
+# This script does not support adding quotes. To do that use
 # https://github.com/horgh/quote-site
 #
 # PostgreSQL schema:
@@ -57,7 +60,7 @@ my $TIME_ZONE = 'America/Vancouver';
 # Done config
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "20170302";
+$VERSION = "20170311";
 %IRSSI = (
 	authors     => "Will Storey",
 	contact     => "will\@summercat.com",
