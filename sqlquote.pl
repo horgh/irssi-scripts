@@ -318,16 +318,11 @@ sub spew_quote {
 	$header .= ": *$search*" if defined $search;
 	&msg($server, $target, $header);
 
-	# Title line
 	if (defined $quote_href->{ title }) {
-		&msg($server, $target, $quote_href->{ title });
-	} else {
-		&msg($server, $target, 'No title');
+		&msg($server, $target, 'Title: ' . $quote_href->{ title });
 	}
 
-	# Date line
-	my $date;
-	if (defined $quote_href->{ create_time}) {
+	if (defined $quote_href->{ create_time }) {
 		my $datetime = DateTime::Format::Pg->parse_timestamptz(
 			$quote_href->{ create_time });
 
@@ -336,19 +331,13 @@ sub spew_quote {
 			$datetime->set_time_zone($time_zone);
 		}
 
-		$date = $datetime->strftime("%Y-%m-%d %H:%M:%S %z");
-	} else {
-		$date = 'missing';
+		my $date = $datetime->strftime("%Y-%m-%d %H:%M:%S %z");
+		&msg($server, $target, 'Date: ' . $date);
 	}
-	my $date_header = "Date: $date";
-	&msg($server, $target, $date_header);
 
-	# Added by line
-	my $added_by = "Added by:";
 	if (defined $quote_href->{ added_by }) {
-		$added_by .= ' ' . $quote_href->{ added_by };
+		&msg($server, $target, 'Added by: ' . $quote_href->{ added_by });
 	}
-	&msg($server, $target, $added_by);
 
 	foreach my $line (split /\n|\r/, $quote_href->{ quote }) {
 		chomp $line;
