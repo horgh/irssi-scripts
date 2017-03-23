@@ -49,12 +49,12 @@ use DBI ();
 use Irssi ();
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "20170311";
+$VERSION = "20170323";
 %IRSSI = (
 	authors     => "Will Storey",
 	contact     => "will\@summercat.com",
 	name        => "sqlquote",
-	description => "Quote SQL database interaction",
+	description => "Display quotes from an SQL database",
 	license     => "Public domain",
 	url         => "https://github.com/horgh/irssi-scripts",
 	changed     => $VERSION,
