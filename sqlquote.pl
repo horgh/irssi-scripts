@@ -953,7 +953,7 @@ sub channel_in_settings_str {
 
 	my $raw_settings_str = Irssi::settings_get_str($settings_str);
 	my @settings = split / /, $raw_settings_str;
-	return grep /$channel/, @settings;
+	return grep /\Q$channel/, @settings;
 }
 
 # @param server $server
