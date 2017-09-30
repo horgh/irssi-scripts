@@ -127,7 +127,7 @@ sub db_query {
 		return undef;
 	}
 
-	my $dbh = &get_dbh;
+	my $dbh = get_dbh();
 	if (!$dbh || !$dbh->ping) {
 		_log("failure getting dbh");
 		return undef;
@@ -163,7 +163,7 @@ sub db_select {
 		return undef;
 	}
 
-	my $sth = &db_query($sql, $paramsAref);
+	my $sth = db_query($sql, $paramsAref);
 	if (!$sth) {
 		_log("failure executing query");
 		return undef;
@@ -178,7 +178,7 @@ sub db_select {
 
 	# Check if successfully fetched href
 	# Fetchall_hashref will have set dbh->err if so
-	my $dbh = &get_dbh;
+	my $dbh = get_dbh();
 	if (!$dbh || $dbh->err) {
 		_log("Failure fetching results of SQL: $sql " . $dbh->errstr);
 		return undef;
@@ -193,7 +193,7 @@ sub db_select_array {
 		return undef;
 	}
 
-	my $sth = &db_query($sql, $params);
+	my $sth = db_query($sql, $params);
 	if (!$sth) {
 		_log('Failed to execute query');
 		return undef;
@@ -224,7 +224,7 @@ sub db_manipulate {
 		return undef;
 	}
 
-	my $sth = &db_query($sql, $paramsAref);
+	my $sth = db_query($sql, $paramsAref);
 	if (!$sth) {
 		_log("failure executing query");
 		return undef;
@@ -325,7 +325,7 @@ sub get_quote_count {
 SELECT COUNT(1) AS id FROM quote
 /;
 	my @params = ();
-	my $href = &db_select($sql, \@params);
+	my $href = db_select($sql, \@params);
 	return undef unless $href && %$href && scalar(keys(%$href)) == 1;
 	my $count = (keys %$href)[0];
 	return $count;
@@ -344,13 +344,13 @@ sub quote_stats {
 		return;
 	}
 
-	my $count = &get_quote_count;
+	my $count = get_quote_count();
 	if (!$count) {
-		&msg($server, $target, "Failed to get quote count.");
+		msg($server, $target, "Failed to get quote count.");
 		return;
 	}
 
-	&msg($server, $target, "There are $count quotes in the database.");
+	msg($server, $target, "There are $count quotes in the database.");
 }
 
 # @param server $server
@@ -371,10 +371,10 @@ sub spew_quote {
 	my $header = "Quote #\002" . $quote_href->{ id } . "\002";
 	$header .= " ($left left)" if defined $left;
 	$header .= ": *$search*" if defined $search;
-	&msg($server, $target, $header);
+	msg($server, $target, $header);
 
 	if (defined $quote_href->{ title }) {
-		&msg($server, $target, 'Title: ' . $quote_href->{ title });
+		msg($server, $target, 'Title: ' . $quote_href->{ title });
 	}
 
 	if (defined $quote_href->{ create_time }) {
@@ -387,17 +387,17 @@ sub spew_quote {
 		}
 
 		my $date = $datetime->strftime("%Y-%m-%d %H:%M:%S %z");
-		&msg($server, $target, 'Date: ' . $date);
+		msg($server, $target, 'Date: ' . $date);
 	}
 
 	if (defined $quote_href->{ added_by }) {
-		&msg($server, $target, 'Added by: ' . $quote_href->{ added_by });
+		msg($server, $target, 'Added by: ' . $quote_href->{ added_by });
 	}
 
 	foreach my $line (split /\n|\r/, $quote_href->{ quote }) {
 		chomp $line;
 		next if $line =~ /^\s*$/;
-		&msg($server, $target, " $line");
+		msg($server, $target, " $line");
 	}
 
 	if (exists $quote_href->{ image } && defined $quote_href->{ image } &&
@@ -407,7 +407,7 @@ sub spew_quote {
 		if (length $site_url > 0) {
 			# We expect the image path to be URI safe.
 			my $image_url = $site_url . '/' . $quote_href->{ image };
-			&msg($server, $target, " Image: $image_url");
+			msg($server, $target, " Image: $image_url");
 		}
 	}
 }
@@ -427,18 +427,18 @@ sub quote_latest {
 
 	my $sql = qq/
 SELECT * FROM quote
-WHERE 1=1 / . &_sensitive_sql($target) . qq/
+WHERE 1=1 / . _sensitive_sql($target) . qq/
 ORDER BY id DESC LIMIT 1
 /;
 	my @params = ();
-	my $href = &db_select($sql, \@params);
+	my $href = db_select($sql, \@params);
 	return unless $href;
 
 	my $id = (keys %$href)[0];
 	return unless $id;
 
 	my $quote_href = $href->{$id};
-	&spew_quote($server, $target, $quote_href);
+	spew_quote($server, $target, $quote_href);
 }
 
 # @param server $server
@@ -457,19 +457,19 @@ sub quote_latest_search {
 		return;
 	}
 
-	my $sql_pattern = &sql_like_escape($pattern);
+	my $sql_pattern = sql_like_escape($pattern);
 
 	my $sql = qq/
 SELECT * FROM quote
 WHERE (quote ILIKE ? OR title ILIKE ?)
-/ . &_sensitive_sql($target) . qq/
+/ . _sensitive_sql($target) . qq/
 ORDER BY id DESC
 LIMIT 1
 /;
 	my @params = ($sql_pattern, $sql_pattern);
-	my $href = &db_select($sql, \@params);
+	my $href = db_select($sql, \@params);
 	if (!$href || !%$href) {
-		&msg($server, $target, "No quotes found matching *$pattern*.");
+		msg($server, $target, "No quotes found matching *$pattern*.");
 		return;
 	}
 
@@ -482,9 +482,9 @@ LIMIT 1
 
 	my $quote_href = $href->{$id};
 
-	&spew_quote($server, $target, $quote_href);
+	spew_quote($server, $target, $quote_href);
 
-	&_record_quote_was_searched($quote_href->{ id }, $nick);
+	_record_quote_was_searched($quote_href->{ id }, $nick);
 }
 
 # @param server $server
@@ -505,11 +505,11 @@ sub quote_random {
 		_log("Fetching new random quotes.");
 		my $sql = qq/
 SELECT * FROM quote
-WHERE 1=1 / . &_sensitive_sql($target) . qq/
+WHERE 1=1 / . _sensitive_sql($target) . qq/
 ORDER BY random() LIMIT 20
 /;
 		my @params = ();
-		my $href = &db_select($sql, \@params);
+		my $href = db_select($sql, \@params);
 		return unless $href;
 
 		# set the global cache
@@ -521,7 +521,7 @@ ORDER BY random() LIMIT 20
 	my $quote_href = $random_quotes->{$id};
 	delete $random_quotes->{$id};
 
-	&spew_quote($server, $target, $quote_href);
+	spew_quote($server, $target, $quote_href);
 }
 
 # @param server $server
@@ -540,20 +540,20 @@ sub quote_id {
 
 	my $sql = qq/
 SELECT * FROM quote WHERE id = ?
-/ . &_sensitive_sql($target) . qq/
+/ . _sensitive_sql($target) . qq/
 /;
 	my @params = ($id);
-	my $href = &db_select($sql, \@params);
+	my $href = db_select($sql, \@params);
 	if (!$href || !%$href || !defined($href->{$id})) {
-		&msg($server, $target, "No quote with id $id found.");
+		msg($server, $target, "No quote with id $id found.");
 		return;
 	}
 
 	my $quote_href = $href->{$id};
 
-	&spew_quote($server, $target, $quote_href);
+	spew_quote($server, $target, $quote_href);
 
-	&_record_quote_was_searched($quote_href->{ id }, $nick);
+	_record_quote_was_searched($quote_href->{ id }, $nick);
 }
 
 # @param string $pattern Search string pattern
@@ -609,26 +609,26 @@ sub quote_search {
 	if (!$search_quotes || !exists $search_quotes->{ $pattern }) {
 		_log("Fetching new quotes for search: *$pattern*");
 
-		my $sql_pattern = &sql_like_escape($pattern);
+		my $sql_pattern = sql_like_escape($pattern);
 		my $sql = qq/
 SELECT
 id, create_time, quote, added_by, title, update_time, update_notes, sensitive,
 	image
 FROM quote
 WHERE (quote ILIKE ? OR title ILIKE ?)
-/ . &_sensitive_sql($target) . qq/
+/ . _sensitive_sql($target) . qq/
 ORDER BY COALESCE(create_time, '1970-01-01') ASC, id ASC
 /;
 		my @params = ($sql_pattern, $sql_pattern);
 
-		my $rows = &db_select_array($sql, \@params);
+		my $rows = db_select_array($sql, \@params);
 		if (!$rows) {
-			&msg($server, $target, "Error performing the search.");
+			msg($server, $target, "Error performing the search.");
 			return;
 		}
 
 		if (@{ $rows } == 0) {
-			&msg($server, $target, "No quotes found matching *$pattern*.");
+			msg($server, $target, "No quotes found matching *$pattern*.");
 			return;
 		}
 
@@ -665,9 +665,9 @@ ORDER BY COALESCE(create_time, '1970-01-01') ASC, id ASC
 		delete $search_quotes->{ $pattern };
 	}
 
-	&spew_quote($server, $target, $quote_href, $count_left, $pattern);
+	spew_quote($server, $target, $quote_href, $count_left, $pattern);
 
-	&_record_quote_was_searched($quote_href->{ id }, $nick);
+	_record_quote_was_searched($quote_href->{ id }, $nick);
 }
 
 # Record into the database that someone searched for and found this quote.
@@ -692,7 +692,7 @@ sub _record_quote_was_searched {
 	my $sql = 'INSERT INTO quote_search(quote_id, nick) VALUES(?, ?)';
 	my @params = ($quote_id, $nick);
 
-	my $row_count = &db_manipulate($sql, \@params);
+	my $row_count = db_manipulate($sql, \@params);
 	if (!defined $row_count || $row_count != 1) {
 		_log("_record_quote_was_searched: Unable to insert");
 		return 0;
@@ -713,28 +713,28 @@ sub quote_count {
 		return;
 	}
 
-	my $sql_pattern = &sql_like_escape($pattern);
+	my $sql_pattern = sql_like_escape($pattern);
 
 	my $sql = qq/
 SELECT COUNT(1) FROM quote WHERE quote ILIKE ? OR title ILIKE ?
 /;
 	my @params = ($sql_pattern, $sql_pattern);
-	my $href = &db_select($sql, \@params, 'count');
+	my $href = db_select($sql, \@params, 'count');
 	if (!$href || !%$href) {
-		&msg($server, $target, "Failed to find count.");
+		msg($server, $target, "Failed to find count.");
 		return;
 	}
 
 	# one and only key of hash should be the count
 	if (scalar(keys(%$href)) != 1) {
-		&msg($server, $target, "Count not found.");
+		msg($server, $target, "Count not found.");
 		return;
 	}
 	my $count = (keys(%$href))[0];
 
-	my $total_count = &get_quote_count;
+	my $total_count = get_quote_count();
 	if (!$total_count) {
-		&msg($server, $target, "Failed to find total count of quotes.");
+		msg($server, $target, "Failed to find total count of quotes.");
 		return;
 	}
 
@@ -742,7 +742,7 @@ SELECT COUNT(1) FROM quote WHERE quote ILIKE ? OR title ILIKE ?
 	my $percent = $count / $total_count * 100;
 	$percent = sprintf "%.2f", $percent;
 
-	&msg($server, $target,
+	msg($server, $target,
 		"There are $count/$total_count ($percent%) quotes matching *$pattern*.");
 }
 
@@ -761,17 +761,17 @@ sub quote_added_by_top {
 		LIMIT 5
 	';
 	my @params;
-	my $rows = &db_select_array($sql, \@params);
+	my $rows = db_select_array($sql, \@params);
 	if (!$rows) {
 		_log('Unable to retrieve rows');
 		return;
 	}
 
-	&msg($server, $target, "Top quote adders (all time):");
+	msg($server, $target, "Top quote adders (all time):");
 	foreach my $row (@{ $rows }) {
 		my ($name, $count) = @{ $row };
 		my $msg = " $name: $count";
-		&msg($server, $target, $msg);
+		msg($server, $target, $msg);
 	}
 }
 
@@ -792,17 +792,17 @@ sub quote_added_by_top_days {
 		LIMIT 5
 	';
 	my @params = ("$days days");
-	my $rows = &db_select_array($sql, \@params);
+	my $rows = db_select_array($sql, \@params);
 	if (!$rows) {
 		_log('Unable to retrieve rows');
 		return;
 	}
 
-	&msg($server, $target, "Top quote adders (past $days days):");
+	msg($server, $target, "Top quote adders (past $days days):");
 	foreach my $row (@{ $rows }) {
 		my ($name, $count) = @{ $row };
 		my $msg = " $name: $count";
-		&msg($server, $target, $msg);
+		msg($server, $target, $msg);
 	}
 }
 
@@ -831,7 +831,7 @@ sub quote_rank {
 		LEFT JOIN quote q
 		ON q.id = qs.quote_id
 
-		WHERE 1=1 / . &_sensitive_sql($target) . q/
+		WHERE 1=1 / . _sensitive_sql($target) . q/
 
 		GROUP BY q.id
 
@@ -841,14 +841,14 @@ sub quote_rank {
 
 	my @params = ($rank-1);
 
-	my $rows = &db_select_array($sql, \@params);
+	my $rows = db_select_array($sql, \@params);
 	if (!$rows) {
 		_log("quote_rank: Select failure");
 		return;
 	}
 
 	if (@{ $rows } == 0) {
-		&msg($server, $target, "Quote not found.");
+		msg($server, $target, "Quote not found.");
 		return;
 	}
 
@@ -867,8 +867,8 @@ sub quote_rank {
 	$msg .= " search" if $votes == 1;
 	$msg .= " searches" if $votes != 1;
 	$msg .= "):";
-	&msg($server, $target, $msg);
-	&spew_quote($server, $target, $quote, undef, undef);
+	msg($server, $target, $msg);
+	spew_quote($server, $target, $quote, undef, undef);
 }
 
 # @param server $server
@@ -964,7 +964,7 @@ sub handle_command {
 
 sub _sensitive_sql {
 	my ($channel) = @_;
-	if (&_channel_includes_sensitive($channel)) {
+	if (_channel_includes_sensitive($channel)) {
 		return '';
 	}
 
@@ -973,7 +973,7 @@ sub _sensitive_sql {
 
 sub _channel_includes_sensitive {
 	my ($channel) = @_;
-	return &channel_in_settings_str('quote_channels_sensitive', $channel);
+	return channel_in_settings_str('quote_channels_sensitive', $channel);
 }
 
 # @param string $settings_str  Name of the setting
