@@ -87,6 +87,7 @@ sub _log {
 	my $output = "$caller: $msg";
 
 	Irssi::print($output);
+	return;
 }
 
 # @return mixed DBI handle or undef
@@ -247,6 +248,7 @@ sub msg {
 	}
 
 	$server->command("MSG $target $msg");
+	return;
 }
 
 # @return void
@@ -258,6 +260,7 @@ sub clear_quote_cache {
 	$random_quotes = undef;
 	$search_quotes = undef;
 	_log("Quote cache cleared.");
+	return;
 }
 
 # @return mixed int count of quotes or undef if failure
@@ -294,6 +297,7 @@ sub quote_stats {
 	}
 
 	msg($server, $target, "There are $count quotes in the database.");
+	return;
 }
 
 # @param server $server
@@ -353,6 +357,7 @@ sub spew_quote {
 			msg($server, $target, " Image: $image_url");
 		}
 	}
+	return;
 }
 
 # @param server $server
@@ -382,6 +387,7 @@ ORDER BY id DESC LIMIT 1
 
 	my $quote_href = $href->{$id};
 	spew_quote($server, $target, $quote_href);
+	return;
 }
 
 # @param server $server
@@ -428,6 +434,7 @@ LIMIT 1
 	spew_quote($server, $target, $quote_href);
 
 	_record_quote_was_searched($quote_href->{ id }, $nick);
+	return;
 }
 
 # @param server $server
@@ -465,6 +472,7 @@ ORDER BY random() LIMIT 20
 	delete $random_quotes->{$id};
 
 	spew_quote($server, $target, $quote_href);
+	return;
 }
 
 # @param server $server
@@ -497,6 +505,7 @@ SELECT * FROM quote WHERE id = ?
 	spew_quote($server, $target, $quote_href);
 
 	_record_quote_was_searched($quote_href->{ id }, $nick);
+	return;
 }
 
 # @param string $pattern Search string pattern
@@ -611,6 +620,7 @@ ORDER BY COALESCE(create_time, '1970-01-01') ASC, id ASC
 	spew_quote($server, $target, $quote_href, $count_left, $pattern);
 
 	_record_quote_was_searched($quote_href->{ id }, $nick);
+	return;
 }
 
 # Record into the database that someone searched for and found this quote.
@@ -687,6 +697,7 @@ SELECT COUNT(1) FROM quote WHERE quote ILIKE ? OR title ILIKE ?
 
 	msg($server, $target,
 		"There are $count/$total_count ($percent%) quotes matching *$pattern*.");
+	return;
 }
 
 sub quote_added_by_top {
@@ -716,6 +727,7 @@ sub quote_added_by_top {
 		my $msg = " $name: $count";
 		msg($server, $target, $msg);
 	}
+	return;
 }
 
 sub quote_added_by_top_days {
@@ -747,6 +759,7 @@ sub quote_added_by_top_days {
 		my $msg = " $name: $count";
 		msg($server, $target, $msg);
 	}
+	return;
 }
 
 sub quote_rank {
@@ -812,6 +825,7 @@ sub quote_rank {
 	$msg .= "):";
 	msg($server, $target, $msg);
 	spew_quote($server, $target, $quote, undef, undef);
+	return;
 }
 
 # @param server $server
