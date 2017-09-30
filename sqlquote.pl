@@ -149,7 +149,7 @@ sub db_query {
 
 # @param string $sql             SQL to execute
 #                                Should be adequate for prepare()
-# @param array ref $paramsAref   Parameters to use
+# @param array ref $params       Parameters to use
 # @param string $keyField        Column to use as key in hash. Optional.
 #                                Defaults to 'id'.
 #
@@ -157,14 +157,14 @@ sub db_query {
 #
 # Execute and return rows from a SELECT query
 sub db_select {
-	my ($sql, $paramsAref, $keyField) = @_;
+	my ($sql, $params, $keyField) = @_;
 	# keyField is optional
-	if (!$sql || !$paramsAref) {
+	if (!$sql || !$params) {
 		_log("invalid param");
 		return undef;
 	}
 
-	my $sth = db_query($sql, $paramsAref);
+	my $sth = db_query($sql, $params);
 	if (!$sth) {
 		_log("failure executing query");
 		return undef;
@@ -213,19 +213,19 @@ sub db_select_array {
 }
 
 # @param string $sql
-# @param aref $paramsAref
+# @param aref $params
 #
 # @return undef if failure, number of rows affected if success
 #
 # Perform a data changing query, such as UPDATE, DELETE, INSERT
 sub db_manipulate {
-	my ($sql, $paramsAref) = @_;
-	if (!$sql || !$paramsAref) {
+	my ($sql, $params) = @_;
+	if (!$sql || !$params) {
 		_log("invalid param");
 		return undef;
 	}
 
-	my $sth = db_query($sql, $paramsAref);
+	my $sth = db_query($sql, $params);
 	if (!$sth) {
 		_log("failure executing query");
 		return undef;
