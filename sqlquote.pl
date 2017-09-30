@@ -251,6 +251,63 @@ sub msg {
 	$server->command("MSG $target $msg");
 }
 
+# Write a message apparently from a nick to the given channel.
+#
+# This is so we can deal with messages showing out of order.
+#
+# You need to call signal_stop() in the signal handler too.
+#
+# Params:
+# string, format name
+# Irssi::Server, the server
+# string, the source nick
+# string, channel name
+# string, msg
+sub print_channel_msg {
+	my ($format, $server, $nick_name, $channel_name, $msg) = @_;
+	if (!$format || !$server || !defined $nick_name || !defined $channel_name ||
+		!defined $msg) {
+		return;
+	}
+
+	my $mode = _get_nick_mode($server, $channel_name, $nick_name);
+
+	$server->printformat($channel_name, MSGLEVEL_PUBLIC, $format, $nick_name,
+		$msg, $mode);
+	return;
+}
+
+# Params:
+# Irssi::Server
+# string channel name
+# string nick name
+sub _get_nick_mode {
+	my ($server, $channel_name, $nick_name) = @_;
+	if (!$server || !defined $channel_name || !defined $nick_name) {
+		return ' ';
+	}
+
+	my $channel = $server->channel_find($channel_name);
+	if (!$channel) {
+		return ' ';
+	}
+
+	my $nick = $channel->nick_find($nick_name);
+	if (!$nick) {
+		return ' ';
+	}
+
+	if ($nick->{op}) {
+		return '@';
+	}
+
+	if ($nick->{voice}) {
+		return '+';
+	}
+
+	return ' ';
+}
+
 # @return void
 #
 # clear the quote cache.
@@ -821,60 +878,90 @@ sub quote_rank {
 # @param string $target
 # @param string $msg   Message on a channel enabled for triggers
 #
-# @return void
+# @return mixed Callback function to do something if we matched a trigger, or
+# undef if there's nothing to do. Why a callback? Because I want to take action
+# after I do something in the 'message own_public' handler. Specifically, write
+# a message before what we trigger. If we just returned a flag saying we did
+# something, we'd still have done it before the caller could do what it needs
+# to do. This is kind of hacky but I don't want to do a big refactor to make
+# e.g., returning all lines to output or something.
 sub handle_command {
 	my ($server, $nick, $target, $msg) = @_;
 	if (!$server || !defined $nick || length $nick == 0 || !$target ||
 		!defined $msg) {
 		&log("handle_command: Invalid parameter");
-		return;
+		return undef;
 	}
 
 	$msg =~ s/^\s+|\s+$//g;
 
 	# NOTE: We handle case insensitivity in the signal handlers (callers of this
 	# function) as we do not want to trigger on 'Quote' for messages we send
-	# ourselve. If we did, quote output would trigger itself.
+	# ourselves. If we did, quote output would trigger itself.
 
 	# quotestats
-	return &quote_stats($server, $target)if $msg =~ /^!?quotestats$/;
+	if ($msg =~ /^!?quotestats$/) {
+		return sub { quote_stats($server, $target) };
+	}
 
 	# latest
-	return &quote_latest($server, $target) if $msg =~ /^!?latest$/;
+	if ($msg =~ /^!?latest$/) {
+		return sub { quote_latest($server, $target) };
+	}
 
 	# latest <search string>
-	return &quote_latest_search($server, $nick, $target, $1)
-		if $msg =~ /^!?latest\s+(.+)$/;
+	if ($msg =~ /^!?latest\s+(.+)$/) {
+		my $search = $1;
+		return sub { quote_latest_search($server, $nick, $target, $search) };
+	}
 
 	# quote
-	return &quote_random($server, $target) if $msg =~ /^!?quote$/;
+	if ($msg =~ /^!?quote$/) {
+		return sub { quote_random($server, $target) };
+	}
 
 	# quote <#>
-	return &quote_id($server, $nick, $target, $1) if $msg =~ /^!?quote\s+(\d+)$/;
+	if ($msg =~ /^!?quote\s+(\d+)$/) {
+		my $number = $1;
+		return sub { quote_id($server, $nick, $target, $1) };
+	}
 
 	# quote <search string>
-	return &quote_search($server, $nick, $target, $1) if $msg =~ /^!?quote\s+(.+)$/;
+	if ($msg =~ /^!?quote\s+(.+)$/) {
+		my $search = $1;
+		return sub { quote_search($server, $nick, $target, $search) };
+	}
 
 	# quotecount <search string>
-	return &quote_count($server, $target, $1) if $msg =~ /^!?quotecount\s+(.+)$/;
+	if ($msg =~ /^!?quotecount\s+(.+)$/) {
+		my $search = $1;
+		return sub { quote_count($server, $target, $search) };
+	}
 
 	# quoteaddedbytop
-	return &quote_added_by_top($server, $target) if $msg =~ /^!?quoteaddedbytop$/;
+	if ($msg =~ /^!?quoteaddedbytop$/) {
+		return sub { quote_added_by_top($server, $target) };
+	}
 
 	# quoteaddedbytop <days>
-	return &quote_added_by_top_days($server, $target, $1)
-		if $msg =~ /^!?quoteaddedbytop\s+(\d+)$/;
+	if ($msg =~ /^!?quoteaddedbytop\s+(\d+)$/) {
+		my $days = $1;
+		return sub { quote_added_by_top_days($server, $target, $days) };
+	}
 
 	# quoterank
 	if ($msg =~ /^!?quoterank$/i) {
 		my $rank = 1;
-		return &quote_rank($server, $target, $rank);
+		return sub { quote_rank($server, $target, $rank) };
 	}
 
+	# quoterank <#>
 	if ($msg =~ /^!?quoterank\s+(\d+)$/i) {
-		my $rank = ($1);
-		return &quote_rank($server, $target, $rank);
+		my $rank = $1;
+		return sub { quote_rank($server, $target, $rank) };
 	}
+
+	return undef;
 }
 
 sub _sensitive_sql {
@@ -926,9 +1013,16 @@ sub sig_msg_pub {
 	$msg = lc $msg;
 
 	# Only trigger in enabled channels
-	return unless &channel_in_settings_str('quote_channels', $target);
+	return unless channel_in_settings_str('quote_channels', $target);
 
-	&handle_command($server, $nick, $target, $msg);
+	my $fn = handle_command($server, $nick, $target, $msg);
+	if ($fn) {
+		Irssi::signal_stop();
+		print_channel_msg('pubmsg', $server, $nick, $target, $msg);
+		$fn->();
+	}
+
+	return;
 }
 
 # @param server $server
@@ -947,9 +1041,16 @@ sub sig_msg_own_pub {
 	# out quotes again due to the 'Quote #' quote header.
 
 	# Only trigger in enabled channels
-	return unless &channel_in_settings_str('quote_channels', $target);
+	return unless channel_in_settings_str('quote_channels', $target);
 
-	&handle_command($server, $server->{ nick }, $target, $msg);
+	my $fn = handle_command($server, $server->{ nick }, $target, $msg);
+	if ($fn) {
+		Irssi::signal_stop();
+		print_channel_msg('own_msg', $server, $server->{nick}, $target, $msg);
+		$fn->();
+	}
+
+	return;
 }
 
 Irssi::signal_add('message public', 'sig_msg_pub');
@@ -983,3 +1084,20 @@ Irssi::settings_add_str('quote', 'quote_site_url', '');
 # timer to clear the quote cache every 24 hours.
 # timer takes time to run in milliseconds.
 Irssi::timeout_add(24*60*60*1000, 'clear_quote_cache', '');
+
+# Register format that we can use to print out channel messages.
+#
+# We use these so we can avoid the situation where messages appear after what
+# they apparently triggered.
+#
+# Unfortunately we apparently cannot use Irssi's core themes. Because of that,
+# I've copied some core formats to use.
+Irssi::theme_register([
+	'own_msg',
+	# $0 = nick, $1 = message, $2 = mode
+	'{ownmsgnick $2 {ownnick $0}}$1',
+
+	'pubmsg',
+	# $0 = nick, $1 = message, $2 = mode
+	'{pubmsgnick $2 {pubnick $0}}$1',
+]);
