@@ -1,4 +1,3 @@
-#
 # This script provides in-channel interaction with a database of quotes. This
 # includes things like searching and displaying quotes in the channel.
 #
@@ -39,7 +38,6 @@
 #   nick VARCHAR,
 #   PRIMARY KEY (id)
 # );
-#
 
 use warnings;
 use strict;
@@ -49,7 +47,7 @@ use DBI ();
 use Irssi ();
 
 use vars qw($VERSION %IRSSI);
-$VERSION = "20170323";
+$VERSION = "20170930";
 %IRSSI = (
 	authors     => "Will Storey",
 	contact     => "will\@summercat.com",
@@ -74,7 +72,7 @@ my $search_quotes;
 # @param string $msg
 #
 # @return void
-sub log {
+sub _log {
 	my ($msg) = @_;
 	if (!defined $msg || !length $msg) {
 		$msg = "no log message given!";
@@ -101,14 +99,14 @@ sub get_dbh {
 
 		if (length $db_host == 0 || length $db_name == 0 || length $db_user == 0 ||
 			length $db_pass == 0) {
-			&log("Missing database settings. See /set quote");
+			_log("Missing database settings. See /set quote");
 			return undef;
 		}
 
 		my $dsn = "dbi:Pg:dbname=$db_name;host=$db_host";
 		$dbh = DBI->connect($dsn, $db_user, $db_pass);
 		if (!$dbh || !$dbh->ping) {
-			&log("failed to connect to database: " . $DBI::errstr);
+			_log("failed to connect to database: " . $DBI::errstr);
 			return undef;
 		}
 	}
@@ -125,24 +123,24 @@ sub get_dbh {
 sub db_query {
 	my ($sql, $paramsAref) = @_;
 	if (!$sql || !$paramsAref) {
-		&log("invalid param");
+		_log("invalid param");
 		return undef;
 	}
 
 	my $dbh = &get_dbh;
 	if (!$dbh || !$dbh->ping) {
-		&log("failure getting dbh");
+		_log("failure getting dbh");
 		return undef;
 	}
 
 	my $sth = $dbh->prepare($sql);
 	if (!$sth) {
-		&log("failure preparing sql: $sql : " . $dbh->errstr);
+		_log("failure preparing sql: $sql : " . $dbh->errstr);
 		return undef;
 	}
 
 	if (!$sth->execute(@$paramsAref)) {
-		&log("failure executing sql: $sql : " . $sth->errstr);
+		_log("failure executing sql: $sql : " . $sth->errstr);
 		return undef;
 	}
 	return $sth;
@@ -161,13 +159,13 @@ sub db_select {
 	my ($sql, $paramsAref, $keyField) = @_;
 	# keyField is optional
 	if (!$sql || !$paramsAref) {
-		&log("invalid param");
+		_log("invalid param");
 		return undef;
 	}
 
 	my $sth = &db_query($sql, $paramsAref);
 	if (!$sth) {
-		&log("failure executing query");
+		_log("failure executing query");
 		return undef;
 	}
 
@@ -182,7 +180,7 @@ sub db_select {
 	# Fetchall_hashref will have set dbh->err if so
 	my $dbh = &get_dbh;
 	if (!$dbh || $dbh->err) {
-		&log("Failure fetching results of SQL: $sql " . $dbh->errstr);
+		_log("Failure fetching results of SQL: $sql " . $dbh->errstr);
 		return undef;
 	}
 	return $href;
@@ -191,23 +189,23 @@ sub db_select {
 sub db_select_array {
 	my ($sql, $params) = @_;
 	if (!defined $sql || length $sql == 0 || !$params) {
-		&log('Invalid parameter');
+		_log('Invalid parameter');
 		return undef;
 	}
 
 	my $sth = &db_query($sql, $params);
 	if (!$sth) {
-		&log('Failed to execute query');
+		_log('Failed to execute query');
 		return undef;
 	}
 
 	my $rows = $sth->fetchall_arrayref;
 	if (!$rows) {
-		&log('Fetchall failed');
+		_log('Fetchall failed');
 		return undef;
 	}
 	if ($sth->err) {
-		&log('Fetchall failed (2)');
+		_log('Fetchall failed (2)');
 		return undef;
 	}
 	return $rows;
@@ -222,13 +220,13 @@ sub db_select_array {
 sub db_manipulate {
 	my ($sql, $paramsAref) = @_;
 	if (!$sql || !$paramsAref) {
-		&log("invalid param");
+		_log("invalid param");
 		return undef;
 	}
 
 	my $sth = &db_query($sql, $paramsAref);
 	if (!$sth) {
-		&log("failure executing query");
+		_log("failure executing query");
 		return undef;
 	}
 	return $sth->rows;
@@ -244,7 +242,7 @@ sub db_manipulate {
 sub msg {
 	my ($server, $target, $msg) = @_;
 	if (!$server || !$target || !$msg) {
-		&log("invalid param");
+		_log("invalid param");
 		return;
 	}
 
@@ -316,7 +314,7 @@ sub clear_quote_cache {
 	# the cached results.
 	$random_quotes = undef;
 	$search_quotes = undef;
-	&log("Quote cache cleared.");
+	_log("Quote cache cleared.");
 }
 
 # @return mixed int count of quotes or undef if failure
@@ -342,7 +340,7 @@ SELECT COUNT(1) AS id FROM quote
 sub quote_stats {
 	my ($server, $target) = @_;
 	if (!$server || !$target) {
-		&log("invalid param");
+		_log("invalid param");
 		return;
 	}
 
@@ -366,7 +364,7 @@ sub spew_quote {
 	my ($server, $target, $quote_href, $left, $search) = @_;
 	# left and search are optional.
 	if (!$server || !defined $target || length $target == 0 || !$quote_href) {
-		&log("spew_quote: Invalid parameter");
+		_log("spew_quote: Invalid parameter");
 		return;
 	}
 
@@ -423,7 +421,7 @@ sub spew_quote {
 sub quote_latest {
 	my ($server, $target) = @_;
 	if (!$server || !$target) {
-		&log("invalid param");
+		_log("invalid param");
 		return;
 	}
 
@@ -455,7 +453,7 @@ sub quote_latest_search {
 	my ($server, $nick, $target, $pattern) = @_;
 	if (!$server || !defined $nick || length $nick == 0 || !$target ||
 		!defined $pattern) {
-		&log("quote_latest_search: Invalid parameter");
+		_log("quote_latest_search: Invalid parameter");
 		return;
 	}
 
@@ -478,7 +476,7 @@ LIMIT 1
 	# find the only key in the hash
 	my $id = (keys %$href)[0];
 	if (!defined $id) {
-		&log("no id found");
+		_log("no id found");
 		return;
 	}
 
@@ -498,13 +496,13 @@ LIMIT 1
 sub quote_random {
 	my ($server, $target) = @_;
 	if (!$server || !$target) {
-		&log("invalid param");
+		_log("invalid param");
 		return;
 	}
 
 	# check if we need to fetch more quotes into the global cache
 	if (!$random_quotes || !%$random_quotes) {
-		&log("Fetching new random quotes.");
+		_log("Fetching new random quotes.");
 		my $sql = qq/
 SELECT * FROM quote
 WHERE 1=1 / . &_sensitive_sql($target) . qq/
@@ -536,7 +534,7 @@ sub quote_id {
 	my ($server, $nick, $target, $id) = @_;
 	if (!$server || !defined $nick || length $nick == 0 || !$target ||
 		!defined $id) {
-		&log("quote_id: Invalid parameter");
+		_log("quote_id: Invalid parameter");
 		return;
 	}
 
@@ -568,7 +566,7 @@ SELECT * FROM quote WHERE id = ?
 sub sql_like_escape {
 	my ($pattern) = @_;
 	if (!defined $pattern) {
-		&log("invalid param");
+		_log("invalid param");
 		return '';
 	}
 
@@ -602,14 +600,14 @@ sub quote_search {
 	my ($server, $nick, $target, $pattern) = @_;
 	if (!$server || !defined $nick || length $nick == 0 || !defined $target ||
 		length $target == 0 || !defined $pattern || length $pattern == 0) {
-		&log("quote_search: Invalid parameter");
+		_log("quote_search: Invalid parameter");
 		return;
 	}
 
 	# Check whether the global cache has quotes for this search. If it doesn't
 	# query the database for quotes.
 	if (!$search_quotes || !exists $search_quotes->{ $pattern }) {
-		&log("Fetching new quotes for search: *$pattern*");
+		_log("Fetching new quotes for search: *$pattern*");
 
 		my $sql_pattern = &sql_like_escape($pattern);
 		my $sql = qq/
@@ -683,11 +681,11 @@ ORDER BY COALESCE(create_time, '1970-01-01') ASC, id ASC
 sub _record_quote_was_searched {
 	my ($quote_id, $nick) = @_;
 	if (!defined $quote_id) {
-		&log("_record_quote_was_searched: Missing quote identifier");
+		_log("_record_quote_was_searched: Missing quote identifier");
 		return 0;
 	}
 	if (!defined $nick || length $nick == 0) {
-		&log("_record_quote_was_searched: Missing nick");
+		_log("_record_quote_was_searched: Missing nick");
 		return 0;
 	}
 
@@ -696,7 +694,7 @@ sub _record_quote_was_searched {
 
 	my $row_count = &db_manipulate($sql, \@params);
 	if (!defined $row_count || $row_count != 1) {
-		&log("_record_quote_was_searched: Unable to insert");
+		_log("_record_quote_was_searched: Unable to insert");
 		return 0;
 	}
 
@@ -711,7 +709,7 @@ sub _record_quote_was_searched {
 sub quote_count {
 	my ($server, $target, $pattern) = @_;
 	if (!$server || !$target || !defined $pattern) {
-		&log("invalid param");
+		_log("invalid param");
 		return;
 	}
 
@@ -751,7 +749,7 @@ SELECT COUNT(1) FROM quote WHERE quote ILIKE ? OR title ILIKE ?
 sub quote_added_by_top {
 	my ($server, $target) = @_;
 	if (!$server || !$target) {
-		&log("invalid parameter");
+		_log("invalid parameter");
 		return;
 	}
 	my $sql = '
@@ -765,7 +763,7 @@ sub quote_added_by_top {
 	my @params;
 	my $rows = &db_select_array($sql, \@params);
 	if (!$rows) {
-		&log('Unable to retrieve rows');
+		_log('Unable to retrieve rows');
 		return;
 	}
 
@@ -780,7 +778,7 @@ sub quote_added_by_top {
 sub quote_added_by_top_days {
 	my ($server, $target, $days) = @_;
 	if (!$server || !$target || !defined $days) {
-		&log("invalid parameter");
+		_log("invalid parameter");
 		return;
 	}
 	my $sql = '
@@ -796,7 +794,7 @@ sub quote_added_by_top_days {
 	my @params = ("$days days");
 	my $rows = &db_select_array($sql, \@params);
 	if (!$rows) {
-		&log('Unable to retrieve rows');
+		_log('Unable to retrieve rows');
 		return;
 	}
 
@@ -811,7 +809,7 @@ sub quote_added_by_top_days {
 sub quote_rank {
 	my ($server, $target, $rank) = @_;
 	if (!$server || !$target || !defined $rank) {
-		&log("quote_rank: Invalid parameter");
+		_log("quote_rank: Invalid parameter");
 		return;
 	}
 
@@ -845,7 +843,7 @@ sub quote_rank {
 
 	my $rows = &db_select_array($sql, \@params);
 	if (!$rows) {
-		&log("quote_rank: Select failure");
+		_log("quote_rank: Select failure");
 		return;
 	}
 
@@ -889,7 +887,7 @@ sub handle_command {
 	my ($server, $nick, $target, $msg) = @_;
 	if (!$server || !defined $nick || length $nick == 0 || !$target ||
 		!defined $msg) {
-		&log("handle_command: Invalid parameter");
+		_log("handle_command: Invalid parameter");
 		return undef;
 	}
 
@@ -987,7 +985,7 @@ sub _channel_includes_sensitive {
 sub channel_in_settings_str {
 	my ($settings_str, $channel) = @_;
 	if (!$settings_str || !$channel) {
-		&log("invalid param");
+		_log("invalid param");
 		return 0;
 	}
 
@@ -1006,7 +1004,7 @@ sub channel_in_settings_str {
 sub sig_msg_pub {
 	my ($server, $msg, $nick, $address, $target) = @_;
 	if (!$server || !defined $msg || !$nick || !$address || !$target) {
-		&log("invalid param");
+		_log("invalid param");
 		return;
 	}
 
@@ -1033,7 +1031,7 @@ sub sig_msg_pub {
 sub sig_msg_own_pub {
 	my ($server, $msg, $target) = @_;
 	if (!$server || !defined $msg || !$target) {
-		&log("invalid param");
+		_log("invalid param");
 		return;
 	}
 
