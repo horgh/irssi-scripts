@@ -36,9 +36,7 @@ sub sig_msg_pub {
 		return;
 	}
 
-	$msg = lc $msg;
-
-	if ($msg =~ /https:\/\/leviathan\.summercat\.com\/(\S+)/) {
+	if ($msg =~ /https:\/\/leviathan\.summercat\.com\/(\S+)/i) {
 		my $rest = $1;
 		my $correction = "https://leviathan.summercat.com:4433/$rest";
 		my $response = "$nick: Did you mean $correction ?";

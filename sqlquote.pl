@@ -970,14 +970,11 @@ sub sig_msg_pub {
 		return;
 	}
 
-	$msg = lc $msg;
-
 	# Only trigger in enabled channels
 	return unless channel_in_settings_str('quote_channels', $target);
 
 	Irssi::signal_continue($server, $msg, $nick, $address, $target);
-	handle_command($server, $nick, $target, $msg);
-
+	handle_command($server, $nick, $target, lc($msg));
 	return;
 }
 
